@@ -1103,6 +1103,46 @@ private struct CommitInspector: View {
 
 }
 
+private struct FileChangeRowContent<Trailing: View>: View {
+    let status: String
+    let path: String
+    let isSelected: Bool
+    let isHovering: Bool
+    let trailing: Trailing
+
+    init(
+        status: String,
+        path: String,
+        isSelected: Bool,
+        isHovering: Bool,
+        @ViewBuilder trailing: () -> Trailing
+    ) {
+        self.status = status
+        self.path = path
+        self.isSelected = isSelected
+        self.isHovering = isHovering
+        self.trailing = trailing()
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            StatusBadge(status: status)
+            Text(path)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            trailing
+        }
+        .padding(.horizontal, 8)
+        .frame(height: 28)
+        .background(
+            isSelected
+                ? Color.accentColor.opacity(RiftUI.selectionOpacity)
+                : Color.primary.opacity(isHovering ? RiftUI.hoverOpacity : 0),
+            in: RoundedRectangle(cornerRadius: RiftUI.rowRadius)
+        )
+    }
+}
+
 private struct CommitFileRow: View {
     @Environment(RepositoryStore.self) private var repository
     let change: CoreCommitFileChange
@@ -1110,10 +1150,12 @@ private struct CommitFileRow: View {
     @State private var isHovering = false
 
     var body: some View {
-        HStack(spacing: 8) {
-            StatusBadge(status: change.status)
-            Text(change.path).lineLimit(1)
-            Spacer(minLength: 4)
+        FileChangeRowContent(
+            status: change.status,
+            path: change.path,
+            isSelected: isSelected,
+            isHovering: isHovering
+        ) {
             Image(systemName: "chevron.right")
                 .font(.caption2.weight(.semibold))
                 .foregroundStyle(.tertiary)
@@ -1125,14 +1167,6 @@ private struct CommitFileRow: View {
         }
         .onHover { isHovering = $0 }
         .help(change.path)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(
-            isSelected
-                ? Color.accentColor.opacity(RiftUI.selectionOpacity)
-                : Color.primary.opacity(isHovering ? RiftUI.hoverOpacity : 0),
-            in: RoundedRectangle(cornerRadius: RiftUI.rowRadius)
-        )
     }
 }
 
@@ -1216,11 +1250,12 @@ private struct ChangeFileRow: View {
     @State private var isHovering = false
 
     var body: some View {
-        HStack(spacing: 8) {
-            StatusBadge(status: change.statusLabel)
-            Text(change.path)
-                .lineLimit(1)
-                .frame(maxWidth: .infinity, alignment: .leading)
+        FileChangeRowContent(
+            status: change.statusLabel,
+            path: change.path,
+            isSelected: isSelected,
+            isHovering: isHovering
+        ) {
             Button {
                 staged ? repository.unstage(change.path) : repository.stage(change.path)
             } label: {
@@ -1239,14 +1274,6 @@ private struct ChangeFileRow: View {
         }
         .onHover { isHovering = $0 }
         .help(change.path)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(
-            isSelected
-                ? Color.accentColor.opacity(RiftUI.selectionOpacity)
-                : Color.primary.opacity(isHovering ? RiftUI.hoverOpacity : 0),
-            in: RoundedRectangle(cornerRadius: RiftUI.rowRadius)
-        )
         .contextMenu {
             Button(staged ? "Unstage File" : "Stage File") {
                 staged ? repository.unstage(change.path) : repository.stage(change.path)
