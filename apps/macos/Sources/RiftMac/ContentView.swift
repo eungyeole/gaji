@@ -672,7 +672,6 @@ private struct SidebarView: View {
                 }
             }
             .listStyle(.sidebar)
-            .listSectionSpacing(.compact)
             .contentMargins(.top, 4, for: .scrollContent)
             .scrollContentBackground(.hidden)
         }
