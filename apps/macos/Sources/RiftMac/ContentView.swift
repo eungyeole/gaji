@@ -109,7 +109,6 @@ private struct RepositoryTabBar: View {
                 ProgressView()
                     .progressViewStyle(.linear)
                     .controlSize(.mini)
-                    .tint(Color.accentColor.opacity(0.7))
                     .accessibilityLabel(Text(workspace.selectedRepository.busyMessage ?? "Working"))
                     .transition(.opacity)
             } else {
