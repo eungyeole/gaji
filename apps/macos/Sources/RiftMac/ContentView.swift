@@ -122,12 +122,14 @@ struct ContentView: View {
         .navigationTitle(repository.title)
         .toolbar {
             ToolbarItem(placement: .navigation) {
-                if repository.isBusy {
-                    ProgressView()
-                        .controlSize(.small)
-                        .frame(width: 16, height: 16)
-                        .transition(.opacity)
-                }
+                ProgressView()
+                    .controlSize(.small)
+                    .scaleEffect(0.82)
+                    .opacity(repository.isBusy ? 1 : 0)
+                    .frame(width: 24, height: 28)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(!repository.isBusy)
+                    .animation(.easeInOut(duration: 0.16), value: repository.isBusy)
             }
             ToolbarItemGroup {
                 Button(action: repository.refresh) {
