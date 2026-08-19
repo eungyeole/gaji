@@ -41,6 +41,20 @@ enum GitOperation: String {
     case revert = "Revert"
 }
 
+enum PullBehavior: String, CaseIterable {
+    case rebase
+    case merge
+    case fastForwardOnly
+
+    var title: String {
+        switch self {
+        case .rebase: "Rebase Local Commits"
+        case .merge: "Merge if Needed"
+        case .fastForwardOnly: "Fast-Forward Only"
+        }
+    }
+}
+
 @MainActor
 @Observable
 final class RepositoryStore {
@@ -61,6 +75,7 @@ final class RepositoryStore {
     var errorMessage: String?
     private(set) var busyMessage: String?
     var isBusy: Bool { busyMessage != nil }
+    var pullBehavior: PullBehavior
     var selection: Commit.ID?
     var selectedFile: String?
     var selectedFileCommit: String?
@@ -120,6 +135,7 @@ final class RepositoryStore {
     }
 
     init(restoreLastRepository: Bool = true) {
+        pullBehavior = PullBehavior(rawValue: UserDefaults.standard.string(forKey: "pullBehavior") ?? "") ?? .rebase
         recentRepositories = UserDefaults.standard.stringArray(forKey: "recentRepositories") ?? []
         if restoreLastRepository,
            let path = UserDefaults.standard.string(forKey: "lastRepository"),
@@ -566,7 +582,16 @@ final class RepositoryStore {
     func fetch(_ remote: String) {
         runCore(["action": "fetch", "path": rootPath, "remote": remote, "prune": true])
     }
-    func pull() { runCore(["action": "pull", "path": rootPath, "rebase": true]) }
+    func pull() { pull(pullBehavior) }
+    func pull(_ behavior: PullBehavior) {
+        pullBehavior = behavior
+        UserDefaults.standard.set(behavior.rawValue, forKey: "pullBehavior")
+        runCore([
+            "action": "pull", "path": rootPath,
+            "rebase": behavior == .rebase,
+            "fastForwardOnly": behavior == .fastForwardOnly
+        ])
+    }
     func push() {
         guard let remote = remotes.first else { return }
         runCore([

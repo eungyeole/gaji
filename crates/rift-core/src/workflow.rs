@@ -384,13 +384,20 @@ pub fn fetch(path: impl AsRef<Path>, remote: &str, prune: bool) -> Result<(), Ri
     .map(|_| ())
 }
 
-pub fn pull(path: impl AsRef<Path>, rebase: bool) -> Result<(), RiftError> {
+pub fn pull(
+    path: impl AsRef<Path>,
+    rebase: bool,
+    fast_forward_only: bool,
+) -> Result<(), RiftError> {
     let root = root(path.as_ref())?;
-    git(
-        &root,
-        &["pull", if rebase { "--rebase" } else { "--no-rebase" }],
-    )
-    .map(|_| ())
+    let mode = if rebase {
+        "--rebase"
+    } else if fast_forward_only {
+        "--ff-only"
+    } else {
+        "--no-rebase"
+    };
+    git(&root, &["pull", mode]).map(|_| ())
 }
 
 pub fn push(

@@ -195,28 +195,40 @@ struct ContentView: View {
         .navigationTitle(repository.title)
         .toolbar {
             ToolbarItemGroup {
-                Button(action: repository.refresh) {
-                    Label("Refresh", systemImage: "arrow.trianglehead.2.clockwise.rotate.90")
-                }
-                .disabled(repository.root == nil)
                 Button(action: workspace.chooseRepository) {
                     Label("Open Repository", systemImage: "folder")
                 }
-                Button(action: repository.fetch) {
-                    Label("Fetch", systemImage: "arrow.down.circle")
-                }
-                .disabled(repository.root == nil)
-                Button(action: repository.pull) {
+                Menu {
+                    Section("Pull Strategy") {
+                        ForEach(PullBehavior.allCases, id: \.self) { behavior in
+                            Button {
+                                repository.pull(behavior)
+                            } label: {
+                                if repository.pullBehavior == behavior {
+                                    Label(behavior.title, systemImage: "checkmark")
+                                } else {
+                                    Text(behavior.title)
+                                }
+                            }
+                        }
+                    }
+                    Divider()
+                    Button("Fetch All", action: repository.fetch)
+                    Button("Refresh View", action: repository.refresh)
+                } label: {
                     Label("Pull", systemImage: "arrow.down.to.line")
+                } primaryAction: {
+                    repository.pull()
                 }
-                .disabled(repository.root == nil)
+                .help("Pull using \(repository.pullBehavior.title)")
+                .disabled(repository.root == nil || repository.isBusy)
                 Button(action: repository.push) {
                     Label("Push", systemImage: "arrow.up.to.line")
                 }
-                .disabled(repository.root == nil)
+                .disabled(repository.root == nil || repository.isBusy)
                 Menu {
-                    Button("Stash All Changes", action: repository.stash)
-                    Button("Pop Latest Stash", action: repository.popStash)
+                    Button("Stash Changes", action: repository.stash)
+                    Button("Pop Latest", action: repository.popStash)
                         .disabled(repository.stashes.isEmpty)
                     if !repository.stashes.isEmpty {
                         Divider()
@@ -231,7 +243,7 @@ struct ContentView: View {
                 } label: {
                     Label("Stash", systemImage: "shippingbox")
                 }
-                .disabled(repository.root == nil)
+                .disabled(repository.root == nil || repository.isBusy)
             }
         }
         .sheet(isPresented: $repository.showsCreateBranch) {

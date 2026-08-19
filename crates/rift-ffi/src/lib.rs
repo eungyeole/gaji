@@ -133,6 +133,8 @@ enum Request {
     Pull {
         path: String,
         rebase: bool,
+        #[serde(default)]
+        fast_forward_only: bool,
     },
     Push {
         path: String,
@@ -535,7 +537,11 @@ fn execute(request: Request) -> Result<(), String> {
             remote,
             prune,
         } => rift_core::fetch(path, &remote, prune),
-        Request::Pull { path, rebase } => rift_core::pull(path, rebase),
+        Request::Pull {
+            path,
+            rebase,
+            fast_forward_only,
+        } => rift_core::pull(path, rebase, fast_forward_only),
         Request::Push {
             path,
             remote,
