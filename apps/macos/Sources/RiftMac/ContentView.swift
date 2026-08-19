@@ -916,7 +916,6 @@ private struct WorkingCopyInspector: View {
             .glassEffect(.regular, in: .rect(cornerRadius: 12))
         }
         .padding(10)
-        .background(Color(nsColor: .windowBackgroundColor).opacity(0.72))
     }
 }
 
@@ -999,7 +998,6 @@ private struct CommitInspector: View {
             }
         }
         .padding(10)
-        .background(Color(nsColor: .windowBackgroundColor).opacity(0.72))
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
