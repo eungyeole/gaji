@@ -667,6 +667,7 @@ private struct SidebarView: View {
             Button(action: action) {
                 Image(systemName: "plus")
                     .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
                     .frame(width: 20, height: 20)
             }
             .buttonStyle(.borderless)
@@ -685,7 +686,7 @@ private struct BranchTreeNode: Identifiable {
 
 private func branchTree(_ branches: [String], prefix: String = "") -> [BranchTreeNode] {
     let groups = Dictionary(grouping: branches) { $0.split(separator: "/", maxSplits: 1).first.map(String.init) ?? $0 }
-    return groups.keys.sorted { $0.localizedStandardCompare($1) == .orderedAscending }.map { name in
+    return groups.keys.map { name in
         let fullName = prefix.isEmpty ? name : "\(prefix)/\(name)"
         let suffixes = groups[name, default: []].compactMap { branch -> String? in
             let parts = branch.split(separator: "/", maxSplits: 1)
@@ -697,6 +698,9 @@ private func branchTree(_ branches: [String], prefix: String = "") -> [BranchTre
             branch: suffixes.isEmpty ? fullName : nil,
             children: branchTree(suffixes, prefix: fullName)
         )
+    }.sorted {
+        if $0.children.isEmpty != $1.children.isEmpty { return !$0.children.isEmpty }
+        return $0.name.localizedStandardCompare($1.name) == .orderedAscending
     }
 }
 
