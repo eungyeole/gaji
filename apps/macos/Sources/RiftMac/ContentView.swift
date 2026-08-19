@@ -1105,7 +1105,7 @@ private struct CommitList: View {
             .frame(height: 24)
             .listRowInsets(EdgeInsets(top: 0, leading: 8, bottom: 0, trailing: 8))
             .listRowSeparator(.hidden)
-            .help(commitDetails(commit))
+            .modifier(CommitHoverDetails(commit: commit))
             .contextMenu {
                 Button("Cherry-Pick \(String(commit.id.prefix(8)))") {
                     repository.cherryPick(commit)
@@ -1129,9 +1129,46 @@ private struct CommitList: View {
         .searchable(text: $repository.searchText, prompt: "Search commits")
     }
 
-    private func commitDetails(_ commit: Commit) -> String {
-        let date = commit.date?.formatted(date: .abbreviated, time: .standard) ?? "Unknown date"
-        return "\(commit.subject)\n\(commit.author) <\(commit.authorEmail)>\n\(date)\n\(commit.id)"
+}
+
+private struct CommitHoverDetails: ViewModifier {
+    let commit: Commit
+    @State private var isHovering = false
+
+    func body(content: Content) -> some View {
+        content
+            .onHover { isHovering = $0 }
+            .popover(isPresented: $isHovering, arrowEdge: .trailing) {
+                VStack(alignment: .leading, spacing: 9) {
+                    Text(commit.subject)
+                        .font(.headline)
+                        .fixedSize(horizontal: false, vertical: true)
+                    LabeledContent("Author") {
+                        Text(commit.author)
+                    }
+                    if !commit.authorEmail.isEmpty {
+                        LabeledContent("Email") {
+                            Text(commit.authorEmail).textSelection(.enabled)
+                        }
+                    }
+                    LabeledContent("Date") {
+                        Text(commit.date?.formatted(date: .long, time: .standard) ?? "Unknown")
+                    }
+                    LabeledContent("Commit") {
+                        Text(commit.id)
+                            .font(.system(.caption, design: .monospaced))
+                            .textSelection(.enabled)
+                    }
+                    if !commit.parents.isEmpty {
+                        LabeledContent("Parents") {
+                            Text(commit.parents.map { String($0.prefix(10)) }.joined(separator: ", "))
+                                .font(.system(.caption, design: .monospaced))
+                        }
+                    }
+                }
+                .padding(14)
+                .frame(width: 380)
+            }
     }
 }
 
