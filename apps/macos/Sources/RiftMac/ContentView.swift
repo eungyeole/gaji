@@ -66,7 +66,41 @@ private struct RepositoryTabBar: View {
         }
         .scrollIndicators(.hidden)
         .background(.bar)
-        .overlay(alignment: .bottom) { Divider() }
+        .overlay(alignment: .bottom) {
+            if workspace.selectedRepository.isBusy {
+                OperationGradientLine().transition(.opacity)
+            } else {
+                Divider()
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: workspace.selectedRepository.isBusy)
+    }
+}
+
+private struct OperationGradientLine: View {
+    @State private var progress: CGFloat = -0.5
+
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack(alignment: .leading) {
+                Color.accentColor.opacity(0.12)
+                LinearGradient(
+                    colors: [.clear, .cyan, Color.accentColor, .purple, .clear],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+                .frame(width: max(120, geometry.size.width * 0.42))
+                .offset(x: progress * geometry.size.width)
+            }
+            .clipped()
+        }
+        .frame(height: 2)
+        .allowsHitTesting(false)
+        .onAppear {
+            withAnimation(.linear(duration: 1.25).repeatForever(autoreverses: false)) {
+                progress = 1.15
+            }
+        }
     }
 }
 
@@ -121,16 +155,6 @@ struct ContentView: View {
         }
         .navigationTitle(repository.title)
         .toolbar {
-            ToolbarItem(placement: .navigation) {
-                ProgressView()
-                    .controlSize(.small)
-                    .scaleEffect(0.82)
-                    .opacity(repository.isBusy ? 1 : 0)
-                    .frame(width: 24, height: 28)
-                    .allowsHitTesting(false)
-                    .accessibilityHidden(!repository.isBusy)
-                    .animation(.easeInOut(duration: 0.16), value: repository.isBusy)
-            }
             ToolbarItemGroup {
                 Button(action: repository.refresh) {
                     Label("Refresh", systemImage: "arrow.trianglehead.2.clockwise.rotate.90")
@@ -968,11 +992,9 @@ private struct CommitInspector: View {
                 ProgressView()
                     .controlSize(.small)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .inspectorCard()
             } else if repository.selectedCommitFiles.isEmpty {
                 ContentUnavailableView("No Changed Files", systemImage: "doc")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .inspectorCard()
             } else {
                 List(repository.selectedCommitFiles) { change in
                     HStack(spacing: 8) {
@@ -996,7 +1018,6 @@ private struct CommitInspector: View {
                 }
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
-                .inspectorCard()
             }
         }
         .padding(10)
@@ -1071,17 +1092,6 @@ private struct ChangeBucket: View {
                 .scrollContentBackground(.hidden)
             }
         }
-        .background(Color(nsColor: .controlBackgroundColor).opacity(0.58), in: RoundedRectangle(cornerRadius: 10))
-        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color(nsColor: .separatorColor).opacity(0.45)))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-    }
-}
-
-private extension View {
-    func inspectorCard() -> some View {
-        background(Color(nsColor: .controlBackgroundColor).opacity(0.58), in: RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color(nsColor: .separatorColor).opacity(0.45)))
-            .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 }
 
