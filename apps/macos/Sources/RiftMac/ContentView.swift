@@ -157,7 +157,9 @@ struct ContentView: View {
                                 }
                                 .frame(minWidth: 420, maxWidth: .infinity)
                                 Group {
-                                    if repository.selection != nil {
+                                    if repository.selectedStash != nil {
+                                        StashInspector()
+                                    } else if repository.selection != nil {
                                         CommitInspector()
                                     } else {
                                         WorkingCopyInspector()
@@ -742,6 +744,11 @@ private struct SidebarView: View {
                             }
                             .frame(height: 22)
                             .tag("stash:\(stash.index)")
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                selectedItem = "stash:\(stash.index)"
+                                repository.selectStash(stash)
+                            }
                             .help(stash.reference)
                             .contextMenu {
                                 Button("Apply") { repository.applyStash(stash.index, pop: false) }
@@ -1082,6 +1089,88 @@ private struct CommitInspector: View {
 
 }
 
+private struct StashInspector: View {
+    @Environment(RepositoryStore.self) private var repository
+
+    var body: some View {
+        VStack(spacing: RiftUI.sectionSpacing) {
+            HStack {
+                Button(action: repository.closeStashDetails) {
+                    Label("Back to Changes", systemImage: "chevron.left")
+                        .labelStyle(.iconOnly)
+                }
+                .buttonStyle(.glass)
+                .help("Back to Changes")
+                Spacer()
+            }
+            .padding(.horizontal, 4)
+            .frame(height: RiftUI.headerHeight)
+
+            if let stash = repository.selectedStash {
+                VStack(alignment: .leading, spacing: 7) {
+                    HStack(alignment: .top) {
+                        Text(stash.subject).font(.headline).lineLimit(2)
+                        Spacer(minLength: 8)
+                        Menu {
+                            Button("Apply") { repository.applyStash(stash.index, pop: false) }
+                            Button("Pop") { repository.applyStash(stash.index, pop: true) }
+                            Divider()
+                            Button("Drop", role: .destructive) { repository.dropStash(stash.index) }
+                        } label: {
+                            Image(systemName: "ellipsis")
+                                .frame(width: 22, height: 22)
+                        }
+                        .menuIndicator(.hidden)
+                        .buttonStyle(.glass)
+                        .fixedSize()
+                    }
+                    Text(stash.reference)
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(12)
+                .glassEffect(.regular, in: .rect(cornerRadius: 14))
+            }
+
+            VStack(spacing: 0) {
+                HStack {
+                    Text("Files").font(.subheadline.weight(.semibold))
+                    Text("\(repository.selectedStashFiles.count)")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                }
+                .padding(.horizontal, 12)
+                .frame(height: RiftUI.sectionHeaderHeight)
+
+                if repository.selectedStashFilesLoading {
+                    ProgressView()
+                        .controlSize(.small)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if repository.selectedStashFiles.isEmpty {
+                    ContentUnavailableView("No Changed Files", systemImage: "doc")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    ScrollView {
+                        LazyVStack(spacing: 2) {
+                            ForEach(repository.selectedStashFiles) { change in
+                                StashFileRow(
+                                    change: change,
+                                    isSelected: repository.selectedFile == change.path
+                                )
+                            }
+                        }
+                        .padding(4)
+                    }
+                }
+            }
+        }
+        .padding(RiftUI.panelInset)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
 private struct FileChangeRowContent<Trailing: View>: View {
     let status: String
     let path: String
@@ -1126,6 +1215,33 @@ private struct FileChangeRowContent<Trailing: View>: View {
             )
         }
         return Color.primary.opacity(isHovering ? RiftUI.hoverOpacity : 0)
+    }
+}
+
+private struct StashFileRow: View {
+    @Environment(RepositoryStore.self) private var repository
+    let change: CoreCommitFileChange
+    let isSelected: Bool
+    @State private var isHovering = false
+
+    var body: some View {
+        FileChangeRowContent(
+            status: change.status,
+            path: change.path,
+            isSelected: isSelected,
+            isHovering: isHovering
+        ) {
+            Image(systemName: "chevron.right")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.tertiary)
+                .opacity(isHovering ? 1 : 0)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            isSelected ? repository.closeFileDetails() : repository.selectStashFile(change)
+        }
+        .onHover { isHovering = $0 }
+        .help(change.path)
     }
 }
 
@@ -1306,11 +1422,11 @@ private struct FileDiffView: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Button(action: repository.closeFileDetails) {
-                    Label("Back to History", systemImage: "chevron.left")
+                    Label(repository.selectedStash == nil ? "Back to History" : "Back to Stash", systemImage: "chevron.left")
                         .labelStyle(.iconOnly)
                 }
                     .buttonStyle(.borderless)
-                    .help("Back to History")
+                    .help(repository.selectedStash == nil ? "Back to History" : "Back to Stash")
                 Divider().frame(height: 18)
                 Text(repository.selectedFile ?? "Diff").font(.headline)
                 Spacer()
@@ -1534,31 +1650,68 @@ private actor GitHubAvatarResolver {
         if let avatars = cache[repository] { return avatars[commit] }
         if let request = requests[repository] { return (await request.value)[commit] }
 
-        let request = Task<[String: URL], Never> {
-            guard let url = URL(string: "https://api.github.com/repos/\(repository)/commits?per_page=100") else {
-                return [:]
-            }
-            var request = URLRequest(url: url, timeoutInterval: 8)
-            request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-            request.setValue("2022-11-28", forHTTPHeaderField: "X-GitHub-Api-Version")
-            do {
-                let (data, response) = try await URLSession.shared.data(for: request)
-                guard (response as? HTTPURLResponse)?.statusCode == 200 else { return [:] }
-                let decoder = JSONDecoder()
-                decoder.keyDecodingStrategy = .convertFromSnakeCase
-                let commits = try decoder.decode([GitHubCommitIdentity].self, from: data)
-                return Dictionary(uniqueKeysWithValues: commits.compactMap { commit in
-                    commit.author.map { (commit.sha, $0.avatarURL) }
-                })
-            } catch {
-                return [:]
-            }
+        let request = Task.detached(priority: .utility) {
+            await Self.load(repository: repository)
         }
         requests[repository] = request
         let avatars = await request.value
         requests[repository] = nil
         cache[repository] = avatars
         return avatars[commit]
+    }
+
+    private nonisolated static func load(repository: String) async -> [String: URL] {
+        let token = githubToken()
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        var avatars: [String: URL] = [:]
+
+        for page in 1...5 {
+            guard let url = URL(
+                string: "https://api.github.com/repos/\(repository)/commits?per_page=100&page=\(page)"
+            ) else { break }
+            var request = URLRequest(url: url, timeoutInterval: 10)
+            request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+            request.setValue("2022-11-28", forHTTPHeaderField: "X-GitHub-Api-Version")
+            if let token { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+            do {
+                let (data, response) = try await URLSession.shared.data(for: request)
+                guard (response as? HTTPURLResponse)?.statusCode == 200 else { break }
+                let commits = try decoder.decode([GitHubCommitIdentity].self, from: data)
+                for commit in commits {
+                    if let avatar = commit.author?.avatarURL { avatars[commit.sha] = avatar }
+                }
+                if commits.count < 100 { break }
+            } catch {
+                break
+            }
+        }
+        return avatars
+    }
+
+    private nonisolated static func githubToken() -> String? {
+        let environment = ProcessInfo.processInfo.environment
+        if let token = environment["GH_TOKEN"] ?? environment["GITHUB_TOKEN"], !token.isEmpty {
+            return token
+        }
+        let process = Process()
+        let output = Pipe()
+        let candidates = ["/opt/homebrew/bin/gh", "/usr/local/bin/gh", "/usr/bin/gh"]
+        guard let executable = candidates.first(where: FileManager.default.fileExists(atPath:)) else { return nil }
+        process.executableURL = URL(fileURLWithPath: executable)
+        process.arguments = ["auth", "token"]
+        process.standardOutput = output
+        process.standardError = FileHandle.nullDevice
+        do {
+            try process.run()
+            process.waitUntilExit()
+            guard process.terminationStatus == 0 else { return nil }
+            let token = String(decoding: output.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            return token.isEmpty ? nil : token
+        } catch {
+            return nil
+        }
     }
 }
 

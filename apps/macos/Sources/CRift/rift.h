@@ -18,6 +18,8 @@ char *rift_file_history_json(const char *path, const char *file);
 char *rift_worktrees_json(const char *path);
 char *rift_submodules_json(const char *path);
 char *rift_stashes_json(const char *path);
+char *rift_stash_files_json(const char *path, size_t index);
+char *rift_stash_file_diff_json(const char *path, size_t index, const char *file);
 char *rift_execute_json(const char *request);
 void rift_string_free(char *value);
 

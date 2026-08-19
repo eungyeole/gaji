@@ -214,6 +214,17 @@ enum CoreBridge {
         try decode(path.withCString(rift_stashes_json), as: [CoreStash].self)
     }
 
+    static func stashFiles(_ path: String, index: Int) throws -> [CoreCommitFileChange] {
+        try decode(path.withCString { rift_stash_files_json($0, index) }, as: [CoreCommitFileChange].self)
+    }
+
+    static func stashFileDiff(_ path: String, index: Int, file: String) throws -> String {
+        let pointer = path.withCString { pathPointer in
+            file.withCString { rift_stash_file_diff_json(pathPointer, index, $0) }
+        }
+        return try decode(pointer, as: String.self)
+    }
+
     static func execute(_ request: [String: Any]) throws {
         let data = try JSONSerialization.data(withJSONObject: request)
         guard let json = String(data: data, encoding: .utf8) else {

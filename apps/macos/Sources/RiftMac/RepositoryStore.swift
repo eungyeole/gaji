@@ -63,6 +63,7 @@ final class RepositoryStore {
     @ObservationIgnored private var operationTask: Task<Void, Never>?
     @ObservationIgnored private var workingFileCache: [String: LoadedFileDetails] = [:]
     @ObservationIgnored private var commitFileCache: [String: String] = [:]
+    @ObservationIgnored private var stashFileCache: [String: String] = [:]
     private(set) var root: URL?
     private(set) var branch = ""
     private(set) var changes: [FileChange] = []
@@ -88,6 +89,9 @@ final class RepositoryStore {
     var selectedFileIsLoading = false
     private(set) var selectedCommitFiles: [CoreCommitFileChange] = []
     private(set) var selectedCommitFilesLoading = false
+    private(set) var selectedStash: CoreStash?
+    private(set) var selectedStashFiles: [CoreCommitFileChange] = []
+    private(set) var selectedStashFilesLoading = false
     var commitMessage = ""
     var commitAmend = false
     var commitSign = false
@@ -164,6 +168,7 @@ final class RepositoryStore {
             root = URL(fileURLWithPath: snapshot.root)
             workingFileCache.removeAll()
             commitFileCache.removeAll()
+            stashFileCache.removeAll()
             UserDefaults.standard.set(snapshot.root, forKey: "lastRepository")
             recentRepositories.removeAll { $0 == snapshot.root }
             recentRepositories.insert(snapshot.root, at: 0)
@@ -285,6 +290,8 @@ final class RepositoryStore {
 
     func select(_ change: FileChange, staged: Bool? = nil) {
         guard let root else { return }
+        selectedStash = nil
+        selectedStashFiles = []
         fileLoadTask?.cancel()
         selectedFile = change.path
         selectedFileCommit = nil
@@ -323,6 +330,8 @@ final class RepositoryStore {
         selectedCommitFiles = []
         selectedCommitFilesLoading = false
         guard let root, let id else { return }
+        selectedStash = nil
+        selectedStashFiles = []
         closeFileDetails()
         selectedCommitFilesLoading = true
         let rootPath = root.path()
@@ -380,6 +389,70 @@ final class RepositoryStore {
         selectedFileDiff = ""
         selectedHunks = []
         selectedFileIsLoading = false
+    }
+
+    func selectStash(_ stash: CoreStash) {
+        guard let root else { return }
+        commitLoadTask?.cancel()
+        selection = nil
+        selectedCommitFiles = []
+        closeFileDetails()
+        selectedStash = stash
+        selectedStashFiles = []
+        selectedStashFilesLoading = true
+        let rootPath = root.path()
+        commitLoadTask = Task { [weak self] in
+            let result = await Task.detached(priority: .userInitiated) {
+                Result { try CoreBridge.stashFiles(rootPath, index: stash.index) }
+            }.value
+            guard !Task.isCancelled, let self, self.selectedStash?.reference == stash.reference else { return }
+            switch result {
+            case let .success(files): self.selectedStashFiles = files
+            case let .failure(error): self.errorMessage = error.localizedDescription
+            }
+            self.selectedStashFilesLoading = false
+        }
+    }
+
+    func selectStashFile(_ change: CoreCommitFileChange) {
+        guard let root, let stash = selectedStash else { return }
+        fileLoadTask?.cancel()
+        selectedFile = change.path
+        selectedFileCommit = stash.reference
+        selectedHunks = []
+        let rootPath = root.path()
+        let cacheKey = "\(rootPath):\(stash.reference):\(change.path)"
+        if let diff = stashFileCache[cacheKey] {
+            selectedFileDiff = diff
+            selectedFileIsLoading = false
+            return
+        }
+        selectedFileDiff = ""
+        selectedFileIsLoading = true
+        fileLoadTask = Task { [weak self] in
+            let result = await Task.detached(priority: .userInitiated) {
+                Result { try CoreBridge.stashFileDiff(rootPath, index: stash.index, file: change.path) }
+            }.value
+            guard !Task.isCancelled,
+                  let self,
+                  self.selectedStash?.reference == stash.reference,
+                  self.selectedFile == change.path else { return }
+            switch result {
+            case let .success(diff):
+                self.stashFileCache[cacheKey] = diff
+                self.selectedFileDiff = diff
+            case let .failure(error): self.errorMessage = error.localizedDescription
+            }
+            self.selectedFileIsLoading = false
+        }
+    }
+
+    func closeStashDetails() {
+        commitLoadTask?.cancel()
+        selectedStash = nil
+        selectedStashFiles = []
+        selectedStashFilesLoading = false
+        closeFileDetails()
     }
 
     func apply(_ hunk: CoreDiffHunk) {
@@ -460,6 +533,7 @@ final class RepositoryStore {
     }
 
     func switchBranch(_ name: String) {
+        prepareForRepositoryTransition()
         runCore(["action": "switchBranch", "path": rootPath, "branch": name])
     }
 
@@ -468,6 +542,7 @@ final class RepositoryStore {
         if branches.contains(localName) {
             switchBranch(localName)
         } else {
+            prepareForRepositoryTransition()
             runCore([
                 "action": "createBranch", "path": rootPath, "name": localName,
                 "start": name, "switch": true
@@ -632,12 +707,15 @@ final class RepositoryStore {
         ])
     }
     func popStash() {
+        closeStashDetails()
         runCore(["action": "stashApply", "path": rootPath, "index": 0, "pop": true])
     }
     func applyStash(_ index: Int, pop: Bool) {
+        closeStashDetails()
         runCore(["action": "stashApply", "path": rootPath, "index": index, "pop": pop])
     }
     func dropStash(_ index: Int) {
+        closeStashDetails()
         runCore(["action": "stashDrop", "path": rootPath, "index": index])
     }
     func revert(_ commit: Commit) {
@@ -694,6 +772,15 @@ final class RepositoryStore {
     }
 
     private var rootPath: String { root?.path() ?? "" }
+
+    private func prepareForRepositoryTransition() {
+        fileLoadTask?.cancel()
+        commitLoadTask?.cancel()
+        selection = nil
+        selectedCommitFiles = []
+        selectedCommitFilesLoading = false
+        closeStashDetails()
+    }
 
     private nonisolated static func loadFileDetails(
         rootPath: String, file: String, staged: Bool

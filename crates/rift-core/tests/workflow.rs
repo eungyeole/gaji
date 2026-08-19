@@ -102,10 +102,28 @@ fn manages_stashes_tags_and_remotes() {
     rift_core::commit(repository.path(), "initial", false).unwrap();
 
     repository.write("hello.txt", "two\n");
-    rift_core::stash_push(repository.path(), "work", false).unwrap();
+    repository.write("new.txt", "new\n");
+    rift_core::stash_push(repository.path(), "work", true).unwrap();
     let stashes = rift_core::stashes(repository.path()).unwrap();
     assert_eq!(stashes.len(), 1);
     assert!(stashes[0].subject.contains("work"));
+    let files = rift_core::stash_files(repository.path(), 0).unwrap();
+    assert!(files.iter().any(|file| file.path == "hello.txt"));
+    assert!(
+        files
+            .iter()
+            .any(|file| file.path == "new.txt" && file.status == "A")
+    );
+    assert!(
+        rift_core::stash_file_diff(repository.path(), 0, "hello.txt")
+            .unwrap()
+            .contains("+two")
+    );
+    assert!(
+        rift_core::stash_file_diff(repository.path(), 0, "new.txt")
+            .unwrap()
+            .contains("+new")
+    );
     rift_core::stash_apply(repository.path(), 0, true).unwrap();
 
     rift_core::create_tag(repository.path(), "v0.1.0", "HEAD", Some("first release")).unwrap();

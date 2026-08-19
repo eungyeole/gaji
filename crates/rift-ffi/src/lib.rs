@@ -424,6 +424,37 @@ pub unsafe extern "C" fn rift_stashes_json(path: *const c_char) -> *mut c_char {
 }
 
 #[unsafe(no_mangle)]
+/// Lists files captured by one stash, including untracked files.
+///
+/// # Safety
+/// `path` must be null or point to a valid, NUL-terminated C string. The return
+/// value must be released exactly once with [`rift_string_free`].
+pub unsafe extern "C" fn rift_stash_files_json(path: *const c_char, index: usize) -> *mut c_char {
+    respond(|| {
+        let path = unsafe { required_string(path, "path")? };
+        rift_core::stash_files(path, index).map_err(|error| error.to_string())
+    })
+}
+
+#[unsafe(no_mangle)]
+/// Reads the patch for one file captured by a stash.
+///
+/// # Safety
+/// Both pointers must be null or point to valid, NUL-terminated C strings. The
+/// return value must be released exactly once with [`rift_string_free`].
+pub unsafe extern "C" fn rift_stash_file_diff_json(
+    path: *const c_char,
+    index: usize,
+    file: *const c_char,
+) -> *mut c_char {
+    respond(|| {
+        let path = unsafe { required_string(path, "path")? };
+        let file = unsafe { required_string(file, "file")? };
+        rift_core::stash_file_diff(path, index, &file).map_err(|error| error.to_string())
+    })
+}
+
+#[unsafe(no_mangle)]
 /// Executes a JSON-encoded request and returns an owned UTF-8 JSON response.
 ///
 /// # Safety

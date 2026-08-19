@@ -440,6 +440,76 @@ pub fn stashes(path: impl AsRef<Path>) -> Result<Vec<StashSummary>, RiftError> {
         .collect())
 }
 
+pub fn stash_files(
+    path: impl AsRef<Path>,
+    index: usize,
+) -> Result<Vec<CommitFileChange>, RiftError> {
+    let root = root(path.as_ref())?;
+    let reference = format!("stash@{{{index}}}");
+    let output = git(
+        &root,
+        &[
+            "diff",
+            "--name-status",
+            "-M",
+            &format!("{reference}^1"),
+            &reference,
+        ],
+    )?;
+    let mut files: Vec<_> = output
+        .lines()
+        .filter_map(|line| {
+            let fields: Vec<_> = line.split('\t').collect();
+            Some(CommitFileChange {
+                status: fields.first()?.to_string(),
+                path: fields.last()?.to_string(),
+            })
+        })
+        .collect();
+
+    let untracked = format!("{reference}^3");
+    if let Ok(output) = git(&root, &["ls-tree", "-r", "--name-only", &untracked]) {
+        for path in output.lines().filter(|path| !path.is_empty()) {
+            if !files.iter().any(|file| file.path == path) {
+                files.push(CommitFileChange {
+                    status: "A".to_owned(),
+                    path: path.to_owned(),
+                });
+            }
+        }
+    }
+    Ok(files)
+}
+
+pub fn stash_file_diff(
+    path: impl AsRef<Path>,
+    index: usize,
+    file: &str,
+) -> Result<String, RiftError> {
+    require_value("file", file)?;
+    let root = root(path.as_ref())?;
+    let reference = format!("stash@{{{index}}}");
+    let untracked = format!("{reference}^3");
+    let untracked_file = format!("{untracked}:{file}");
+    if git(&root, &["cat-file", "-e", &untracked_file]).is_ok() {
+        return git(
+            &root,
+            &["show", "--root", "--format=", &untracked, "--", file],
+        );
+    }
+    git(
+        &root,
+        &[
+            "diff",
+            "--find-renames",
+            &format!("{reference}^1"),
+            &reference,
+            "--",
+            file,
+        ],
+    )
+}
+
 pub fn stash_push(
     path: impl AsRef<Path>,
     message: &str,
