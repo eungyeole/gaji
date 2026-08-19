@@ -3,8 +3,8 @@ import CryptoKit
 import SwiftUI
 
 private enum RiftUI {
-    static let panelInset: CGFloat = 10
-    static let sectionSpacing: CGFloat = 10
+    static let panelInset: CGFloat = 8
+    static let sectionSpacing: CGFloat = 8
     static let headerHeight: CGFloat = 40
     static let sectionHeaderHeight: CGFloat = 32
     static let rowRadius: CGFloat = 8
@@ -223,6 +223,8 @@ struct ContentView: View {
                     Label("Push", systemImage: "arrow.up.to.line")
                 }
                 .disabled(repository.root == nil || repository.isBusy)
+            }
+            ToolbarItemGroup {
                 Button(action: repository.stash) {
                     Label("Stash", systemImage: "shippingbox")
                 }
@@ -1011,7 +1013,7 @@ private struct WorkingCopyInspector: View {
                     )
             }
             .padding(12)
-            .overlay(alignment: .top) { Divider() }
+            .glassEffect(.regular, in: .rect(cornerRadius: 14))
         }
         .padding(RiftUI.panelInset)
     }
@@ -1034,7 +1036,7 @@ private struct CommitInspector: View {
                     Label("Back to Changes", systemImage: "chevron.left")
                         .labelStyle(.iconOnly)
                 }
-                .buttonStyle(.borderless)
+                .buttonStyle(.glass)
                 .help("Back to Changes")
                 Spacer()
             }
@@ -1056,38 +1058,41 @@ private struct CommitInspector: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(12)
-                .overlay(alignment: .bottom) { Divider() }
+                .glassEffect(.regular, in: .rect(cornerRadius: 14))
             }
-            HStack {
-                Text("Files").font(.subheadline.weight(.semibold))
-                Text("\(repository.selectedCommitFiles.count)")
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
-                Spacer()
-            }
-            .padding(.horizontal, 12)
-            .frame(height: RiftUI.sectionHeaderHeight)
+            VStack(spacing: 0) {
+                HStack {
+                    Text("Files").font(.subheadline.weight(.semibold))
+                    Text("\(repository.selectedCommitFiles.count)")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                }
+                .padding(.horizontal, 12)
+                .frame(height: RiftUI.sectionHeaderHeight)
 
-            if repository.selectedCommitFilesLoading {
-                ProgressView()
-                    .controlSize(.small)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else if repository.selectedCommitFiles.isEmpty {
-                ContentUnavailableView("No Changed Files", systemImage: "doc")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                ScrollView {
-                    LazyVStack(spacing: 2) {
-                        ForEach(repository.selectedCommitFiles) { change in
-                            CommitFileRow(
-                                change: change,
-                                isSelected: repository.selectedFile == change.path
-                            )
+                if repository.selectedCommitFilesLoading {
+                    ProgressView()
+                        .controlSize(.small)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if repository.selectedCommitFiles.isEmpty {
+                    ContentUnavailableView("No Changed Files", systemImage: "doc")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    ScrollView {
+                        LazyVStack(spacing: 2) {
+                            ForEach(repository.selectedCommitFiles) { change in
+                                CommitFileRow(
+                                    change: change,
+                                    isSelected: repository.selectedFile == change.path
+                                )
+                            }
                         }
+                        .padding(4)
                     }
-                    .padding(4)
                 }
             }
+            .glassEffect(.regular, in: .rect(cornerRadius: 14))
         }
         .padding(RiftUI.panelInset)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -1118,7 +1123,7 @@ private struct CommitFileRow: View {
         .onHover { isHovering = $0 }
         .help(change.path)
         .padding(.horizontal, 8)
-        .padding(.vertical, 5)
+        .padding(.vertical, 4)
         .background(
             isSelected
                 ? Color.accentColor.opacity(RiftUI.selectionOpacity)
@@ -1197,6 +1202,7 @@ private struct ChangeBucket: View {
                 }
             }
         }
+        .glassEffect(.regular, in: .rect(cornerRadius: 14))
     }
 }
 
@@ -1232,7 +1238,7 @@ private struct ChangeFileRow: View {
         .onHover { isHovering = $0 }
         .help(change.path)
         .padding(.horizontal, 8)
-        .padding(.vertical, 5)
+        .padding(.vertical, 4)
         .background(
             isSelected
                 ? Color.accentColor.opacity(RiftUI.selectionOpacity)
@@ -1260,8 +1266,7 @@ private struct StatusBadge: View {
         Text(mark)
             .font(.system(.caption2, design: .monospaced, weight: .bold))
             .foregroundStyle(color)
-            .frame(width: 20, height: 20)
-            .background(color.opacity(0.12), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+            .frame(width: 16, height: 20)
     }
 
     private var mark: String {
