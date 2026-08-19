@@ -1135,11 +1135,18 @@ private struct FileChangeRowContent<Trailing: View>: View {
         .padding(.horizontal, 8)
         .frame(height: 28)
         .background(
-            isSelected
-                ? Color.accentColor.opacity(RiftUI.selectionOpacity)
-                : Color.primary.opacity(isHovering ? RiftUI.hoverOpacity : 0),
+            rowBackground,
             in: RoundedRectangle(cornerRadius: RiftUI.rowRadius)
         )
+    }
+
+    private var rowBackground: Color {
+        if isSelected {
+            return Color.accentColor.opacity(
+                RiftUI.selectionOpacity + (isHovering ? RiftUI.hoverOpacity : 0)
+            )
+        }
+        return Color.primary.opacity(isHovering ? RiftUI.hoverOpacity : 0)
     }
 }
 
