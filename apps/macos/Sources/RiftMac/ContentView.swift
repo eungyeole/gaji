@@ -1074,35 +1074,33 @@ private struct CommitList: View {
 
         List(rows, selection: $selection) { row in
             let commit = row.commit
-            HStack(alignment: .top, spacing: 8) {
+            HStack(spacing: 8) {
                 CommitGraph(row: row, width: graphWidth)
-                VStack(alignment: .leading, spacing: 5) {
-                    if !commit.references.isEmpty {
-                        ScrollView(.horizontal) {
-                            HStack(spacing: 4) {
-                                ForEach(commit.references, id: \.self) { reference in
-                                    Text(reference.replacingOccurrences(of: "HEAD -> ", with: ""))
-                                        .font(.caption2.weight(.semibold))
-                                        .foregroundStyle(reference.hasPrefix("tag: ") ? Color.orange : Color.accentColor)
-                                        .padding(.horizontal, 6)
-                                        .padding(.vertical, 2)
-                                        .background(Color.accentColor.opacity(0.1), in: Capsule())
-                                }
-                            }
-                        }
-                        .scrollIndicators(.hidden)
-                    }
-                    Text(commit.subject).fontWeight(.medium).lineLimit(2)
-                    HStack {
-                        Text(commit.author)
-                        Spacer()
-                        if let date = commit.date { Text(date, style: .relative) }
-                    }
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                ForEach(commit.references.prefix(3), id: \.self) { reference in
+                    Text(reference.replacingOccurrences(of: "HEAD -> ", with: ""))
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(reference.hasPrefix("tag: ") ? Color.orange : Color.accentColor)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(Color.accentColor.opacity(0.1), in: Capsule())
+                        .fixedSize()
+                }
+                Text(commit.subject)
+                    .fontWeight(.medium)
+                    .lineLimit(1)
+                    .layoutPriority(1)
+                Spacer(minLength: 8)
+                Text(commit.author)
+                    .lineLimit(1)
+                if let date = commit.date {
+                    Text(date, style: .relative)
+                        .fixedSize()
                 }
             }
-            .padding(.vertical, 3)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .frame(height: 24)
+            .listRowInsets(EdgeInsets(top: 0, leading: 8, bottom: 0, trailing: 8))
             .listRowSeparator(.hidden)
             .contextMenu {
                 Button("Cherry-Pick \(String(commit.id.prefix(8)))") {
@@ -1123,6 +1121,7 @@ private struct CommitList: View {
                 }
             }
         }
+        .environment(\.defaultMinListRowHeight, 24)
         .searchable(text: $repository.searchText, prompt: "Search commits")
     }
 }
@@ -1156,15 +1155,15 @@ private struct CommitGraph: View {
 
     var body: some View {
         Canvas { context, size in
-            let centerY: CGFloat = 14
+            let centerY = size.height / 2
             let color = colors[row.nodeLane % colors.count]
 
             for (topLane, hash) in row.topLanes.enumerated() where hash != row.commit.id {
                 guard let bottomLane = row.bottomLanes.firstIndex(of: hash) else { continue }
                 var path = Path()
-                path.move(to: point(topLane, 0))
+                path.move(to: point(topLane, -1))
                 path.addCurve(
-                    to: point(bottomLane, size.height),
+                    to: point(bottomLane, size.height + 1),
                     control1: point(topLane, size.height * 0.45),
                     control2: point(bottomLane, size.height * 0.55)
                 )
@@ -1172,7 +1171,7 @@ private struct CommitGraph: View {
             }
 
             var incoming = Path()
-            incoming.move(to: point(row.nodeLane, 0))
+            incoming.move(to: point(row.nodeLane, -1))
             incoming.addLine(to: point(row.nodeLane, centerY))
             context.stroke(incoming, with: .color(color), lineWidth: 2)
 
@@ -1181,7 +1180,7 @@ private struct CommitGraph: View {
                 var path = Path()
                 path.move(to: point(row.nodeLane, centerY))
                 path.addCurve(
-                    to: point(lane, size.height),
+                    to: point(lane, size.height + 1),
                     control1: point(row.nodeLane, size.height * 0.55),
                     control2: point(lane, size.height * 0.72)
                 )
@@ -1193,7 +1192,7 @@ private struct CommitGraph: View {
             context.stroke(Path(ellipseIn: node), with: .color(.white.opacity(0.75)), lineWidth: 1.5)
         }
         .frame(width: max(24, width))
-        .frame(minHeight: 54, maxHeight: .infinity)
+        .frame(height: 24)
         .accessibilityHidden(true)
     }
 
