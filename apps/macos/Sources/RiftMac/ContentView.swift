@@ -807,10 +807,11 @@ private struct SidebarView: View {
             Button(action: action) {
                 Image(systemName: "plus")
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color(nsColor: .secondaryLabelColor))
                     .frame(width: 20, height: 20)
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(.plain)
+            .tint(Color(nsColor: .secondaryLabelColor))
             .help("Add \(title)")
         }
         .frame(height: 24)
