@@ -70,6 +70,7 @@ pub struct GraphCommit {
     pub parents: Vec<String>,
     pub references: Vec<String>,
     pub author: String,
+    pub author_email: String,
     pub authored_at: String,
     pub subject: String,
 }
@@ -725,13 +726,13 @@ pub fn commit_graph(path: impl AsRef<Path>, limit: usize) -> Result<Vec<GraphCom
             "--date=iso-strict",
             "-n",
             &limit,
-            "--pretty=format:%H%x1f%P%x1f%D%x1f%an%x1f%aI%x1f%s%x1e",
+            "--pretty=format:%H%x1f%P%x1f%D%x1f%an%x1f%ae%x1f%aI%x1f%s%x1e",
         ],
     )?;
     Ok(output
         .split('\x1e')
         .filter_map(|record| {
-            let mut fields = record.trim().splitn(6, '\x1f');
+            let mut fields = record.trim().splitn(7, '\x1f');
             Some(GraphCommit {
                 id: fields.next()?.to_owned(),
                 parents: fields
@@ -747,6 +748,7 @@ pub fn commit_graph(path: impl AsRef<Path>, limit: usize) -> Result<Vec<GraphCom
                     .map(str::to_owned)
                     .collect(),
                 author: fields.next()?.to_owned(),
+                author_email: fields.next()?.to_owned(),
                 authored_at: fields.next()?.to_owned(),
                 subject: fields.next()?.to_owned(),
             })

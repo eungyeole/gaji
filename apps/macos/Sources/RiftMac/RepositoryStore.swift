@@ -17,14 +17,16 @@ struct FileChange: Identifiable, Hashable {
 struct Commit: Identifiable, Hashable {
     let id: String
     let author: String
+    let authorEmail: String
     let date: Date?
     let subject: String
     let parents: [String]
     let references: [String]
 
-    init(id: String, author: String, date: Date?, subject: String, parents: [String] = [], references: [String] = []) {
+    init(id: String, author: String, authorEmail: String = "", date: Date?, subject: String, parents: [String] = [], references: [String] = []) {
         self.id = id
         self.author = author
+        self.authorEmail = authorEmail
         self.date = date
         self.subject = subject
         self.parents = parents
@@ -212,7 +214,8 @@ final class RepositoryStore {
             let formatter = ISO8601DateFormatter()
             commits = try CoreBridge.graph(root.path()).map {
                 Commit(
-                    id: $0.id, author: $0.author, date: formatter.date(from: $0.authoredAt),
+                    id: $0.id, author: $0.author, authorEmail: $0.authorEmail,
+                    date: formatter.date(from: $0.authoredAt),
                     subject: $0.subject, parents: $0.parents, references: $0.references
                 )
             }

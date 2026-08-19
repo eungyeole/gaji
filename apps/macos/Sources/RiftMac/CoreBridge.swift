@@ -31,6 +31,7 @@ struct CoreGraphCommit: Decodable {
     let parents: [String]
     let references: [String]
     let author: String
+    let authorEmail: String
     let authoredAt: String
     let subject: String
 }

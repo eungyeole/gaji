@@ -1,4 +1,5 @@
 import AppKit
+import CryptoKit
 import SwiftUI
 
 struct WorkspaceView: View {
@@ -585,16 +586,26 @@ private struct SidebarView: View {
     @Environment(RepositoryStore.self) private var repository
     @Environment(WorkspaceStore.self) private var workspace
     @State private var selectedItem: String?
+    @State private var branchQuery = ""
+
+    private var matchingLocalBranches: [String] { matching(repository.branches) }
+    private var matchingRemoteBranches: [String] { matching(repository.remoteBranches) }
 
     var body: some View {
         VStack(spacing: 0) {
+            TextField("Search branches", text: $branchQuery)
+                .textFieldStyle(.roundedBorder)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
             List(selection: $selectedItem) {
                 Section {
-                    BranchRow(name: repository.branch, isCurrent: true)
-                        .tag("local:\(repository.branch)")
-                        .contextMenu { LocalBranchMenu(branch: repository.branch) }
+                    if matchingLocalBranches.contains(repository.branch) {
+                        BranchRow(name: repository.branch, isCurrent: true)
+                            .tag("local:\(repository.branch)")
+                            .contextMenu { LocalBranchMenu(branch: repository.branch) }
+                    }
                     BranchTreeRows(
-                        nodes: branchTree(repository.branches.filter { $0 != repository.branch }),
+                        nodes: branchTree(matchingLocalBranches.filter { $0 != repository.branch }),
                         scope: .local
                     )
                 } header: {
@@ -602,7 +613,7 @@ private struct SidebarView: View {
                 }
 
                 Section {
-                    BranchTreeRows(nodes: branchTree(repository.remoteBranches), scope: .remote)
+                    BranchTreeRows(nodes: branchTree(matchingRemoteBranches), scope: .remote)
                 } header: {
                     sectionHeader("Remote") { repository.showsAddRemote = true }
                 }
@@ -656,6 +667,11 @@ private struct SidebarView: View {
                 selectedItem = "local:\(branch)"
             }
         }
+    }
+
+    private func matching(_ branches: [String]) -> [String] {
+        let query = branchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        return query.isEmpty ? branches : branches.filter { $0.localizedCaseInsensitiveContains(query) }
     }
 
     private func sectionHeader(_ title: String, action: @escaping () -> Void) -> some View {
@@ -1076,6 +1092,7 @@ private struct CommitList: View {
             let commit = row.commit
             HStack(spacing: 8) {
                 CommitGraph(row: row, width: graphWidth)
+                CommitAvatar(commit: commit)
                 ForEach(commit.references.prefix(3), id: \.self) { reference in
                     Text(reference.replacingOccurrences(of: "HEAD -> ", with: ""))
                         .font(.caption2.weight(.semibold))
@@ -1089,19 +1106,13 @@ private struct CommitList: View {
                     .fontWeight(.medium)
                     .lineLimit(1)
                     .layoutPriority(1)
-                Spacer(minLength: 8)
-                Text(commit.author)
-                    .lineLimit(1)
-                if let date = commit.date {
-                    Text(date, style: .relative)
-                        .fixedSize()
-                }
             }
             .font(.caption)
             .foregroundStyle(.secondary)
             .frame(height: 24)
             .listRowInsets(EdgeInsets(top: 0, leading: 8, bottom: 0, trailing: 8))
             .listRowSeparator(.hidden)
+            .help(commitDetails(commit))
             .contextMenu {
                 Button("Cherry-Pick \(String(commit.id.prefix(8)))") {
                     repository.cherryPick(commit)
@@ -1123,6 +1134,40 @@ private struct CommitList: View {
         }
         .environment(\.defaultMinListRowHeight, 24)
         .searchable(text: $repository.searchText, prompt: "Search commits")
+    }
+
+    private func commitDetails(_ commit: Commit) -> String {
+        let date = commit.date?.formatted(date: .abbreviated, time: .standard) ?? "Unknown date"
+        return "\(commit.subject)\n\(commit.author) <\(commit.authorEmail)>\n\(date)\n\(commit.id)"
+    }
+}
+
+private struct CommitAvatar: View {
+    let commit: Commit
+
+    var body: some View {
+        AsyncImage(url: avatarURL) { phase in
+            if case let .success(image) = phase {
+                image.resizable().scaledToFill()
+            } else {
+                Circle()
+                    .fill(Color.accentColor.opacity(0.18))
+                    .overlay {
+                        Text(String(commit.author.prefix(1)).uppercased())
+                            .font(.system(size: 9, weight: .semibold))
+                            .foregroundStyle(.tint)
+                    }
+            }
+        }
+        .frame(width: 18, height: 18)
+        .clipShape(Circle())
+    }
+
+    private var avatarURL: URL? {
+        let email = commit.authorEmail.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !email.isEmpty else { return nil }
+        let digest = Insecure.MD5.hash(data: Data(email.utf8)).map { String(format: "%02x", $0) }.joined()
+        return URL(string: "https://www.gravatar.com/avatar/\(digest)?d=404&s=48")
     }
 }
 
