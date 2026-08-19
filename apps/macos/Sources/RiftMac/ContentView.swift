@@ -82,6 +82,7 @@ struct ContentView: View {
             if repository.root == nil {
                 VStack(spacing: 0) {
                     RepositoryTabBar()
+                    if repository.isBusy { OperationProgressBar() }
                     WelcomeView()
                 }
             } else {
@@ -89,6 +90,9 @@ struct ContentView: View {
                     if repository.operation != nil {
                         ConflictBar()
                         Divider()
+                    }
+                    if repository.isBusy {
+                        OperationProgressBar()
                     }
                     NavigationSplitView(columnVisibility: $columnVisibility) {
                         SidebarView()
@@ -443,6 +447,24 @@ struct ContentView: View {
         } message: {
             Text(repository.errorMessage ?? "Unknown error")
         }
+    }
+}
+
+private struct OperationProgressBar: View {
+    @Environment(RepositoryStore.self) private var repository
+
+    var body: some View {
+        HStack(spacing: 9) {
+            ProgressView().controlSize(.small)
+            Text(repository.busyMessage ?? "Working…")
+                .font(.callout.weight(.medium))
+            Spacer()
+        }
+        .padding(.horizontal, 14)
+        .frame(height: 34)
+        .background(.bar)
+        .overlay(alignment: .bottom) { Divider() }
+        .transition(.move(edge: .top).combined(with: .opacity))
     }
 }
 

@@ -46,6 +46,7 @@ enum GitOperation: String {
 final class RepositoryStore {
     @ObservationIgnored private var fileLoadTask: Task<Void, Never>?
     @ObservationIgnored private var commitLoadTask: Task<Void, Never>?
+    @ObservationIgnored private var operationTask: Task<Void, Never>?
     private(set) var root: URL?
     private(set) var branch = ""
     private(set) var changes: [FileChange] = []
@@ -58,6 +59,8 @@ final class RepositoryStore {
     private(set) var operation: GitOperation?
     private(set) var conflicts: [String] = []
     var errorMessage: String?
+    private(set) var busyMessage: String?
+    var isBusy: Bool { busyMessage != nil }
     var selection: Commit.ID?
     var selectedFile: String?
     var selectedFileCommit: String?
@@ -175,14 +178,12 @@ final class RepositoryStore {
     func cloneRepository() {
         let url = cloneURL.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !url.isEmpty, !cloneDestination.isEmpty else { return }
-        do {
-            try CoreBridge.execute([
-                "action": "clone", "url": url, "destination": cloneDestination, "bare": false
-            ])
-            showsClone = false
-            open(URL(fileURLWithPath: cloneDestination))
-        } catch {
-            errorMessage = error.localizedDescription
+        let destination = cloneDestination
+        showsClone = false
+        runCore([
+            "action": "clone", "url": url, "destination": destination, "bare": false
+        ]) { [weak self] in
+            self?.open(URL(fileURLWithPath: destination))
         }
     }
 
@@ -193,14 +194,9 @@ final class RepositoryStore {
         panel.canCreateDirectories = true
         panel.nameFieldStringValue = "new-repository"
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        do {
-            try CoreBridge.execute([
-                "action": "initialize", "path": url.path(), "defaultBranch": "main"
-            ])
-            open(url)
-        } catch {
-            errorMessage = error.localizedDescription
-        }
+        runCore([
+            "action": "initialize", "path": url.path(), "defaultBranch": "main"
+        ]) { [weak self] in self?.open(url) }
     }
 
     func refresh() {
@@ -347,9 +343,10 @@ final class RepositoryStore {
         runCore([
             "action": "applyPatch", "path": rootPath, "patch": hunk.patch,
             "staged": true, "reverse": selectedFileIsStaged
-        ])
-        if let file = selectedFile, let change = changes.first(where: { $0.path == file }) {
-            select(change)
+        ]) { [weak self] in
+            guard let self, let file = self.selectedFile,
+                  let change = self.changes.first(where: { $0.path == file }) else { return }
+            self.select(change)
         }
     }
 
@@ -364,9 +361,10 @@ final class RepositoryStore {
     }
 
     func stage(_ file: String) {
-        runCore(["action": "stage", "path": rootPath, "files": [file]])
-        if selectedFile == file, let change = changes.first(where: { $0.path == file }) {
-            select(change, staged: true)
+        runCore(["action": "stage", "path": rootPath, "files": [file]]) { [weak self] in
+            guard let self, self.selectedFile == file,
+                  let change = self.changes.first(where: { $0.path == file }) else { return }
+            self.select(change, staged: true)
         }
     }
 
@@ -377,9 +375,10 @@ final class RepositoryStore {
     }
 
     func unstage(_ file: String) {
-        runCore(["action": "unstage", "path": rootPath, "files": [file]])
-        if selectedFile == file, let change = changes.first(where: { $0.path == file }) {
-            select(change, staged: false)
+        runCore(["action": "unstage", "path": rootPath, "files": [file]]) { [weak self] in
+            guard let self, self.selectedFile == file,
+                  let change = self.changes.first(where: { $0.path == file }) else { return }
+            self.select(change, staged: false)
         }
     }
 
@@ -414,8 +413,7 @@ final class RepositoryStore {
             "action": "commit", "path": rootPath, "message": message,
             "amend": amend ?? commitAmend, "sign": commitSign,
             "signoff": commitSignoff, "allowEmpty": false
-        ])
-        if errorMessage == nil { commitMessage = "" }
+        ]) { [weak self] in self?.commitMessage = "" }
     }
 
     func switchBranch(_ name: String) {
@@ -533,10 +531,12 @@ final class RepositoryStore {
     func createBranch() {
         let name = newBranchName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { return }
-        runCore(["action": "createBranch", "path": rootPath, "name": name, "start": "HEAD", "switch": true])
-        if errorMessage == nil {
-            newBranchName = ""
-            showsCreateBranch = false
+        runCore([
+            "action": "createBranch", "path": rootPath, "name": name,
+            "start": "HEAD", "switch": true
+        ]) { [weak self] in
+            self?.newBranchName = ""
+            self?.showsCreateBranch = false
         }
     }
 
@@ -652,15 +652,61 @@ final class RepositoryStore {
         return LoadedFileDetails(diff: details.patch, hunks: details.hunks)
     }
 
-    private func runCore(_ request: [String: Any]) {
-        var operationError: String?
+    private func runCore(_ request: [String: Any], onSuccess: (() -> Void)? = nil) {
+        guard !isBusy else { return }
+        let json: String
         do {
-            try CoreBridge.execute(request)
+            let data = try JSONSerialization.data(withJSONObject: request)
+            guard let encoded = String(data: data, encoding: .utf8) else {
+                throw CoreError.message("Could not encode native request")
+            }
+            json = encoded
         } catch {
-            operationError = error.localizedDescription
+            errorMessage = error.localizedDescription
+            return
         }
-        refresh()
-        if conflicts.isEmpty { errorMessage = operationError }
+        busyMessage = operationMessage(request)
+        errorMessage = nil
+        operationTask = Task { [weak self] in
+            let operationError = await Task.detached(priority: .userInitiated) {
+                do {
+                    try CoreBridge.execute(json: json)
+                    return nil as String?
+                } catch {
+                    return error.localizedDescription
+                }
+            }.value
+            guard let self else { return }
+            self.refresh()
+            self.busyMessage = nil
+            if operationError == nil { onSuccess?() }
+            if self.conflicts.isEmpty { self.errorMessage = operationError }
+        }
+    }
+
+    private func operationMessage(_ request: [String: Any]) -> String {
+        let action = request["action"] as? String ?? "git"
+        switch action {
+        case "clone": return "Cloning repository…"
+        case "initialize": return "Creating repository…"
+        case "switchBranch": return "Switching to \(request["branch"] as? String ?? "branch")…"
+        case "createBranch": return "Creating branch…"
+        case "fetch": return "Fetching from \(request["remote"] as? String ?? "remote")…"
+        case "pull": return "Pulling changes…"
+        case "push", "pushTag": return "Pushing changes…"
+        case "merge": return "Merging branches…"
+        case "rebase", "interactiveRebase": return "Rebasing commits…"
+        case "cherryPick": return "Cherry-picking commit…"
+        case "revert": return "Reverting commit…"
+        case "commit": return "Creating commit…"
+        case "stage": return "Staging changes…"
+        case "unstage": return "Unstaging changes…"
+        case "discard": return "Discarding changes…"
+        case "stashPush", "stashApply", "stashDrop": return "Updating stash…"
+        case "addWorktree", "removeWorktree": return "Updating worktrees…"
+        case "updateSubmodules": return "Updating submodules…"
+        default: return "Running Git operation…"
+        }
     }
 
     private func git(at root: URL, _ arguments: String...) throws -> String {

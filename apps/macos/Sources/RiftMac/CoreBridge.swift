@@ -219,6 +219,10 @@ enum CoreBridge {
         guard let json = String(data: data, encoding: .utf8) else {
             throw CoreError.message("Could not encode native request")
         }
+        try execute(json: json)
+    }
+
+    static func execute(json: String) throws {
         let pointer = json.withCString(rift_execute_json)
         let responseData = try consume(pointer)
         let response = try JSONDecoder().decode(ExecuteEnvelope.self, from: responseData)
