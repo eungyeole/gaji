@@ -968,26 +968,6 @@ private struct WorkingCopyInspector: View {
         @Bindable var repository = repository
 
         VStack(spacing: RiftUI.sectionSpacing) {
-            HStack {
-                Text("Working Copy").font(.headline)
-                Spacer()
-                if !repository.unstagedChanges.isEmpty {
-                    Menu {
-                        Button("Discard All Changes…", role: .destructive) {
-                            repository.requestDiscard(repository.unstagedChanges.map(\.path))
-                        }
-                    } label: {
-                        Image(systemName: "ellipsis")
-                            .frame(width: 22, height: 22)
-                    }
-                    .menuIndicator(.hidden)
-                    .buttonStyle(.glass)
-                    .fixedSize()
-                }
-            }
-            .padding(.horizontal, 4)
-            .frame(height: RiftUI.headerHeight)
-
             VStack(spacing: 8) {
                 ChangeBucket(staged: false)
                     .frame(minHeight: 120, maxHeight: .infinity)
@@ -1181,6 +1161,19 @@ private struct ChangeBucket: View {
                 }
                 .buttonStyle(.borderless)
                 .disabled(changes.isEmpty)
+                if !staged, !changes.isEmpty {
+                    Menu {
+                        Button("Discard All…", role: .destructive) {
+                            repository.requestDiscard(changes.map(\.path))
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .frame(width: 20, height: 20)
+                    }
+                    .menuIndicator(.hidden)
+                    .buttonStyle(.borderless)
+                    .fixedSize()
+                }
             }
             .padding(.horizontal, 12)
             .frame(height: RiftUI.sectionHeaderHeight)
