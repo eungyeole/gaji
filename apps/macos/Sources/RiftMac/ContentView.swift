@@ -9,6 +9,7 @@ struct WorkspaceView: View {
         ContentView()
             .environment(workspace.selectedRepository)
             .id(workspace.selectedTabID)
+            .onChange(of: workspace.selectedRepository.root) { _, _ in workspace.persistTabs() }
     }
 }
 
@@ -78,27 +79,26 @@ private struct RepositoryTabBar: View {
 }
 
 private struct OperationGradientLine: View {
-    @State private var progress: CGFloat = -0.5
+    @State private var intensity = 0.28
 
     var body: some View {
-        GeometryReader { geometry in
-            ZStack(alignment: .leading) {
-                Color.accentColor.opacity(0.12)
-                LinearGradient(
-                    colors: [.clear, .cyan, Color.accentColor, .purple, .clear],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-                .frame(width: max(120, geometry.size.width * 0.42))
-                .offset(x: progress * geometry.size.width)
-            }
-            .clipped()
-        }
-        .frame(height: 2)
+        LinearGradient(
+            colors: [
+                Color.accentColor.opacity(0.04),
+                Color.accentColor.opacity(0.22),
+                Color.purple.opacity(0.1),
+                Color.accentColor.opacity(0.04)
+            ],
+            startPoint: .leading,
+            endPoint: .trailing
+        )
+        .opacity(intensity)
+        .frame(height: 1.5)
+        .drawingGroup(opaque: false, colorMode: .linear)
         .allowsHitTesting(false)
         .onAppear {
-            withAnimation(.linear(duration: 1.25).repeatForever(autoreverses: false)) {
-                progress = 1.15
+            withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
+                intensity = 0.72
             }
         }
     }
@@ -580,45 +580,73 @@ private struct WelcomeView: View {
     @Environment(RepositoryStore.self) private var repository
 
     var body: some View {
-        ZStack {
-            LinearGradient(colors: [.indigo.opacity(0.28), .clear, .cyan.opacity(0.18)],
-                           startPoint: .topLeading, endPoint: .bottomTrailing)
-                .ignoresSafeArea()
-            VStack(spacing: 18) {
+        VStack(spacing: 24) {
+            VStack(spacing: 8) {
                 Image(systemName: "point.3.connected.trianglepath.dotted")
-                    .font(.system(size: 56, weight: .medium))
-                    .symbolRenderingMode(.hierarchical)
-                Text("Rift").font(.system(size: 42, weight: .bold, design: .rounded))
-                Text("A native home for your Git repositories").foregroundStyle(.secondary)
-                HStack {
-                    Button("Create…", action: repository.createRepository)
-                    Button("Clone…") { repository.showsClone = true }
-                    Button("Open Repository…", action: repository.chooseRepository)
-                        .buttonStyle(.glassProminent)
+                    .font(.system(size: 34, weight: .medium))
+                    .foregroundStyle(.secondary)
+                Text("Start with a repository").font(.title2.weight(.semibold))
+                Text("Open an existing project or create a new one.")
+                    .foregroundStyle(.secondary)
+            }
+            HStack(spacing: 10) {
+                Button(action: repository.chooseRepository) {
+                    Label("Open", systemImage: "folder")
                 }
-                .controlSize(.large)
-                if !repository.recentRepositories.isEmpty {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Recent Repositories")
-                            .font(.caption.bold())
-                            .foregroundStyle(.secondary)
-                        ForEach(repository.recentRepositories.prefix(5), id: \.self) { path in
-                            Button {
-                                repository.openRecent(path)
-                            } label: {
-                                Label(URL(fileURLWithPath: path).lastPathComponent, systemImage: "clock")
-                                    .frame(maxWidth: 260, alignment: .leading)
-                            }
-                            .buttonStyle(.plain)
-                            .help(path)
-                        }
-                    }
-                    .padding(.top, 8)
+                .buttonStyle(.borderedProminent)
+                Button { repository.showsClone = true } label: {
+                    Label("Clone", systemImage: "square.and.arrow.down")
+                }
+                Button(action: repository.createRepository) {
+                    Label("Create", systemImage: "plus")
                 }
             }
-            .padding(42)
-            .glassEffect(.regular, in: .rect(cornerRadius: 28))
+            .controlSize(.large)
+            if !repository.recentRepositories.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Recent")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    ForEach(repository.recentRepositories.prefix(6), id: \.self) { path in
+                        RecentRepositoryRow(path: path)
+                    }
+                }
+                .padding(.top, 4)
+            }
         }
+        .frame(width: 440)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(40)
+    }
+}
+
+private struct RecentRepositoryRow: View {
+    @Environment(RepositoryStore.self) private var repository
+    let path: String
+    @State private var isHovering = false
+
+    var body: some View {
+        Button { repository.openRecent(path) } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "folder").foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(URL(fileURLWithPath: path).lastPathComponent).lineLimit(1)
+                    Text(path).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+                    .opacity(isHovering ? 1 : 0)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(Color.primary.opacity(isHovering ? 0.055 : 0), in: RoundedRectangle(cornerRadius: 8))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { isHovering = $0 }
+        .help(path)
     }
 }
 
@@ -996,46 +1024,57 @@ private struct CommitInspector: View {
                 ContentUnavailableView("No Changed Files", systemImage: "doc")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                List(repository.selectedCommitFiles) { change in
-                    HStack(spacing: 8) {
-                        Text(commitStatusMark(change.status))
-                            .font(.system(.callout, design: .monospaced, weight: .bold))
-                            .foregroundStyle(commitStatusColor(change.status))
-                            .frame(width: 14)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text((change.path as NSString).lastPathComponent).lineLimit(1)
-                            let parent = (change.path as NSString).deletingLastPathComponent
-                            if !parent.isEmpty && parent != "." {
-                                Text(parent).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
-                            }
+                ScrollView {
+                    LazyVStack(spacing: 2) {
+                        ForEach(repository.selectedCommitFiles) { change in
+                            CommitFileRow(
+                                change: change,
+                                isSelected: repository.selectedFile == change.path
+                            )
                         }
                     }
-                    .contentShape(Rectangle())
-                    .onTapGesture { repository.selectCommitFile(change) }
-                    .help(change.path)
-                    .listRowInsets(.init(top: 4, leading: 8, bottom: 4, trailing: 8))
-                    .listRowSeparator(.hidden)
+                    .padding(4)
                 }
-                .listStyle(.plain)
-                .scrollContentBackground(.hidden)
             }
         }
         .padding(10)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private func commitStatusMark(_ status: String) -> String {
-        if status.hasPrefix("A") { return "+" }
-        if status.hasPrefix("D") { return "−" }
-        if status.hasPrefix("R") { return "R" }
-        return "M"
-    }
+}
 
-    private func commitStatusColor(_ status: String) -> Color {
-        if status.hasPrefix("A") { return .green }
-        if status.hasPrefix("D") { return .red }
-        if status.hasPrefix("R") { return .blue }
-        return .orange
+private struct CommitFileRow: View {
+    @Environment(RepositoryStore.self) private var repository
+    let change: CoreCommitFileChange
+    let isSelected: Bool
+    @State private var isHovering = false
+
+    var body: some View {
+        HStack(spacing: 8) {
+            StatusBadge(status: change.status)
+            VStack(alignment: .leading, spacing: 1) {
+                Text((change.path as NSString).lastPathComponent).lineLimit(1)
+                let parent = (change.path as NSString).deletingLastPathComponent
+                if !parent.isEmpty && parent != "." {
+                    Text(parent).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                }
+            }
+            Spacer(minLength: 4)
+            Image(systemName: "chevron.right")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.tertiary)
+                .opacity(isHovering ? 1 : 0)
+        }
+        .contentShape(Rectangle())
+        .onTapGesture { repository.selectCommitFile(change) }
+        .onHover { isHovering = $0 }
+        .help(change.path)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(
+            isSelected ? Color.accentColor.opacity(0.16) : Color.primary.opacity(isHovering ? 0.055 : 0),
+            in: RoundedRectangle(cornerRadius: 8)
+        )
     }
 }
 
@@ -1082,14 +1121,18 @@ private struct ChangeBucket: View {
                     .foregroundStyle(.tertiary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                List(selection: fileSelection) {
+                ScrollView {
+                    LazyVStack(spacing: 2) {
                     ForEach(changes) { change in
-                        ChangeFileRow(change: change, staged: staged)
-                            .tag(change.path)
+                        ChangeFileRow(
+                            change: change,
+                            staged: staged,
+                            isSelected: fileSelection.wrappedValue == change.path
+                        )
                     }
+                    }
+                    .padding(4)
                 }
-                .listStyle(.plain)
-                .scrollContentBackground(.hidden)
             }
         }
     }
@@ -1099,14 +1142,12 @@ private struct ChangeFileRow: View {
     @Environment(RepositoryStore.self) private var repository
     let change: FileChange
     let staged: Bool
+    let isSelected: Bool
     @State private var isHovering = false
 
     var body: some View {
         HStack(spacing: 8) {
-            Text(statusMark)
-                .font(.system(.callout, design: .monospaced, weight: .bold))
-                .foregroundStyle(statusColor)
-                .frame(width: 14)
+            StatusBadge(status: change.statusLabel)
             VStack(alignment: .leading, spacing: 1) {
                 Text((change.path as NSString).lastPathComponent).lineLimit(1)
                 let parent = (change.path as NSString).deletingLastPathComponent
@@ -1128,10 +1169,15 @@ private struct ChangeFileRow: View {
             .help(staged ? "Unstage file" : "Stage file")
         }
         .contentShape(Rectangle())
+        .onTapGesture { repository.select(change, staged: staged) }
         .onHover { isHovering = $0 }
         .help(change.path)
-        .listRowInsets(.init(top: 3, leading: 8, bottom: 3, trailing: 8))
-        .listRowSeparator(.hidden)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(
+            isSelected ? Color.accentColor.opacity(0.16) : Color.primary.opacity(isHovering ? 0.055 : 0),
+            in: RoundedRectangle(cornerRadius: 8)
+        )
         .contextMenu {
             Button(staged ? "Unstage File" : "Stage File") {
                 staged ? repository.unstage(change.path) : repository.stage(change.path)
@@ -1144,12 +1190,31 @@ private struct ChangeFileRow: View {
         }
     }
 
-    private var statusMark: String {
-        switch change.statusLabel { case "A", "U": "+"; case "D": "−"; case "R": "R"; default: "M" }
+}
+
+private struct StatusBadge: View {
+    let status: String
+
+    var body: some View {
+        Text(mark)
+            .font(.system(.caption2, design: .monospaced, weight: .bold))
+            .foregroundStyle(color)
+            .frame(width: 20, height: 20)
+            .background(color.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
     }
 
-    private var statusColor: Color {
-        switch change.statusLabel { case "A", "U": .green; case "D": .red; case "R": .blue; default: .orange }
+    private var mark: String {
+        if status.hasPrefix("A") || status.hasPrefix("U") { return "+" }
+        if status.hasPrefix("D") { return "−" }
+        if status.hasPrefix("R") { return "R" }
+        return "M"
+    }
+
+    private var color: Color {
+        if status.hasPrefix("A") || status.hasPrefix("U") { return .green }
+        if status.hasPrefix("D") { return .red }
+        if status.hasPrefix("R") { return .blue }
+        return .orange
     }
 }
 
