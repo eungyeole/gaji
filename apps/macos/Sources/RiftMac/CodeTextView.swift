@@ -27,11 +27,14 @@ struct CodeTextView: NSViewRepresentable {
         textView.isVerticallyResizable = true
         textView.autoresizingMask = [.width]
         textView.minSize = .zero
-        textView.maxSize = NSSize(width: .greatestFiniteMagnitude, height: .greatestFiniteMagnitude)
+        textView.maxSize = NSSize(
+            width: CGFloat.greatestFiniteMagnitude,
+            height: CGFloat.greatestFiniteMagnitude
+        )
         textView.textContainer?.widthTracksTextView = false
         textView.textContainer?.containerSize = NSSize(
-            width: .greatestFiniteMagnitude,
-            height: .greatestFiniteMagnitude
+            width: CGFloat.greatestFiniteMagnitude,
+            height: CGFloat.greatestFiniteMagnitude
         )
         scrollView.documentView = textView
         return scrollView
