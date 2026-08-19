@@ -47,6 +47,7 @@ final class RepositoryStore {
     private(set) var changes: [FileChange] = []
     private(set) var commits: [Commit] = []
     private(set) var branches: [String] = []
+    private(set) var remoteBranches: [String] = []
     private(set) var remotes: [String] = []
     private(set) var stashes: [CoreStash] = []
     private(set) var tags: [String] = []
@@ -56,6 +57,7 @@ final class RepositoryStore {
     var selection: Commit.ID?
     var selectedFile: String?
     var selectedFileDiff = ""
+    var selectedCommitDiff = ""
     var selectedHunks: [CoreDiffHunk] = []
     var selectedFileIsStaged = false
     var commitMessage = ""
@@ -94,8 +96,18 @@ final class RepositoryStore {
     var renamingBranch: String?
     var renamedBranch = ""
     var deletingBranch: String?
+    var pendingDiscardFiles: [String]?
 
     var title: String { root?.lastPathComponent ?? "Rift" }
+    var unstagedChanges: [FileChange] {
+        changes.filter { $0.worktreeStatus != " " || $0.indexStatus == "?" }
+    }
+    var stagedChanges: [FileChange] {
+        changes.filter { $0.indexStatus != " " && $0.indexStatus != "?" }
+    }
+    var checkedOutWorktreeBranches: Set<String> {
+        Set(worktrees.compactMap(\.branch))
+    }
 
     init() {
         recentRepositories = UserDefaults.standard.stringArray(forKey: "recentRepositories") ?? []
@@ -204,6 +216,10 @@ final class RepositoryStore {
             }
             branches = try git(at: root, "branch", "--format=%(refname:short)")
                 .split(separator: "\n").map(String.init)
+            remoteBranches = try git(at: root, "for-each-ref", "--format=%(refname:short)", "refs/remotes")
+                .split(separator: "\n")
+                .map(String.init)
+                .filter { !$0.hasSuffix("/HEAD") }
             remotes = try git(at: root, "remote").split(separator: "\n").map(String.init)
             stashes = (try? CoreBridge.stashes(root.path())) ?? []
             tags = try git(at: root, "tag", "--list").split(separator: "\n").map(String.init)
@@ -218,7 +234,14 @@ final class RepositoryStore {
             default: nil
             }
             conflicts = state.conflicts
-            if !commits.contains(where: { $0.id == selection }) {
+            if let selectedFile, !changes.contains(where: { $0.path == selectedFile }) {
+                self.selectedFile = nil
+                selectedFileDiff = ""
+                selectedHunks = []
+            }
+            if let selection, !commits.contains(where: { $0.id == selection }) {
+                self.selection = changes.isEmpty ? commits.first?.id : nil
+            } else if selection == nil, changes.isEmpty {
                 selection = commits.first?.id
             }
             errorMessage = nil
@@ -231,15 +254,25 @@ final class RepositoryStore {
         runCore(["action": "cherryPick", "path": rootPath, "revision": commit.id])
     }
 
-    func select(_ change: FileChange) {
+    func select(_ commit: Commit) {
+        guard let root else { return }
+        selectedFile = nil
+        selection = commit.id
+        selectedCommitDiff = (try? git(
+            at: root, "show", "--format=fuller", "--stat", "--patch", "--no-ext-diff", commit.id
+        )) ?? ""
+    }
+
+    func select(_ change: FileChange, staged: Bool? = nil) {
         guard let root else { return }
         selectedFile = change.path
-        let staged = change.indexStatus != " " && change.indexStatus != "?"
-        selectedFileIsStaged = staged
+        selection = nil
+        let inspectStaged = staged ?? (change.indexStatus != " " && change.indexStatus != "?")
+        selectedFileIsStaged = inspectStaged
         selectedFileDiff = (try? git(
-            at: root, "diff", staged ? "--cached" : "--no-ext-diff", "--", change.path
+            at: root, "diff", inspectStaged ? "--cached" : "--no-ext-diff", "--", change.path
         )) ?? ""
-        selectedHunks = (try? CoreBridge.hunks(root.path(), file: change.path, staged: staged)) ?? []
+        selectedHunks = (try? CoreBridge.hunks(root.path(), file: change.path, staged: inspectStaged)) ?? []
     }
 
     func apply(_ hunk: CoreDiffHunk) {
@@ -264,14 +297,46 @@ final class RepositoryStore {
 
     func stage(_ file: String) {
         runCore(["action": "stage", "path": rootPath, "files": [file]])
+        if selectedFile == file, let change = changes.first(where: { $0.path == file }) {
+            select(change, staged: true)
+        }
+    }
+
+    func stageAll() {
+        let files = Array(Set(unstagedChanges.map(\.path))).sorted()
+        guard !files.isEmpty else { return }
+        runCore(["action": "stage", "path": rootPath, "files": files])
     }
 
     func unstage(_ file: String) {
         runCore(["action": "unstage", "path": rootPath, "files": [file]])
+        if selectedFile == file, let change = changes.first(where: { $0.path == file }) {
+            select(change, staged: false)
+        }
+    }
+
+    func unstageAll() {
+        let files = Array(Set(stagedChanges.map(\.path))).sorted()
+        guard !files.isEmpty else { return }
+        runCore(["action": "unstage", "path": rootPath, "files": files])
     }
 
     func discard(_ file: String) {
         runCore(["action": "discard", "path": rootPath, "files": [file]])
+    }
+
+    func requestDiscard(_ files: [String]) {
+        let tracked = Array(Set(files.filter { file in
+            changes.contains { $0.path == file && ($0.worktreeStatus != " " || $0.indexStatus == "?") }
+        })).sorted()
+        guard !tracked.isEmpty else { return }
+        pendingDiscardFiles = tracked
+    }
+
+    func confirmDiscard() {
+        guard let files = pendingDiscardFiles, !files.isEmpty else { return }
+        pendingDiscardFiles = nil
+        runCore(["action": "discard", "path": rootPath, "files": files])
     }
 
     func createCommit(amend: Bool? = nil) {
@@ -287,6 +352,18 @@ final class RepositoryStore {
 
     func switchBranch(_ name: String) {
         runCore(["action": "switchBranch", "path": rootPath, "branch": name])
+    }
+
+    func switchRemoteBranch(_ name: String) {
+        let localName = name.split(separator: "/", maxSplits: 1).last.map(String.init) ?? name
+        if branches.contains(localName) {
+            switchBranch(localName)
+        } else {
+            runCore([
+                "action": "createBranch", "path": rootPath, "name": localName,
+                "start": name, "switch": true
+            ])
+        }
     }
     func merge(_ name: String) {
         runCore(["action": "merge", "path": rootPath, "revision": name, "noFastForward": false])

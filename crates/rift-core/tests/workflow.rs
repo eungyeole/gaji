@@ -72,6 +72,14 @@ fn stages_diffs_commits_and_manages_branches() {
             .git(&["log", "-1", "--format=%B"])
             .contains("Signed-off-by: Rift Test")
     );
+    repository.write("hello.txt", "discard this\n");
+    repository.write("scratch.txt", "untracked\n");
+    rift_core::discard(repository.path(), &["hello.txt", "scratch.txt"]).unwrap();
+    assert_eq!(
+        fs::read_to_string(repository.path().join("hello.txt")).unwrap(),
+        "hello again\n"
+    );
+    assert!(!repository.path().join("scratch.txt").exists());
     rift_core::create_branch(repository.path(), "feature", &head, true).unwrap();
     let branches = rift_core::branches(repository.path()).unwrap();
     assert_eq!(branches.len(), 2);
@@ -115,6 +123,29 @@ fn manages_stashes_tags_and_remotes() {
     assert_eq!(remotes[0].fetch_url, "https://example.invalid/rift.git");
     rift_core::remove_remote(repository.path(), "origin").unwrap();
     assert!(rift_core::remotes(repository.path()).unwrap().is_empty());
+}
+
+#[test]
+fn checks_out_a_remote_branch_with_its_upstream() {
+    let repository = Repository::new();
+    repository.write("hello.txt", "hello\n");
+    rift_core::stage(repository.path(), &["hello.txt"]).unwrap();
+    rift_core::commit(repository.path(), "initial", false).unwrap();
+    repository.git(&["remote", "add", "origin", "."]);
+    repository.git(&["fetch", "-q", "origin", "main:refs/remotes/origin/topic"]);
+
+    rift_core::create_branch(repository.path(), "topic", "origin/topic", true).unwrap();
+
+    assert_eq!(repository.git(&["branch", "--show-current"]), "topic");
+    assert_eq!(
+        repository.git(&[
+            "rev-parse",
+            "--abbrev-ref",
+            "--symbolic-full-name",
+            "@{upstream}"
+        ]),
+        "origin/topic"
+    );
 }
 
 #[test]

@@ -179,7 +179,22 @@ pub fn unstage(path: impl AsRef<Path>, files: &[&str]) -> Result<(), RiftError> 
 }
 
 pub fn discard(path: impl AsRef<Path>, files: &[&str]) -> Result<(), RiftError> {
-    paths_command(path.as_ref(), &["restore", "--worktree"], files)
+    if files.is_empty() {
+        return Err(RiftError::GitFailed("no files selected".to_owned()));
+    }
+    let root = root(path.as_ref())?;
+    let (tracked, untracked): (Vec<_>, Vec<_>) = files
+        .iter()
+        .partition(|file| git(&root, &["ls-files", "--error-unmatch", "--", file]).is_ok());
+    if !tracked.is_empty() {
+        let tracked: Vec<&str> = tracked.into_iter().copied().collect();
+        paths_command(&root, &["restore", "--worktree"], &tracked)?;
+    }
+    if !untracked.is_empty() {
+        let untracked: Vec<&str> = untracked.into_iter().copied().collect();
+        paths_command(&root, &["clean", "-fd"], &untracked)?;
+    }
+    Ok(())
 }
 
 pub fn commit(path: impl AsRef<Path>, message: &str, amend: bool) -> Result<String, RiftError> {
@@ -260,7 +275,14 @@ pub fn create_branch(
     require_ref_name(name)?;
     let root = root(path.as_ref())?;
     let commit = resolve_commit(&root, start)?;
-    if switch {
+    let is_remote_branch = git(
+        &root,
+        &["show-ref", "--verify", &format!("refs/remotes/{start}")],
+    )
+    .is_ok();
+    if switch && is_remote_branch {
+        git(&root, &["switch", "-c", name, "--track", start])
+    } else if switch {
         git(&root, &["switch", "-c", name, &commit])
     } else {
         git(&root, &["branch", name, &commit])
