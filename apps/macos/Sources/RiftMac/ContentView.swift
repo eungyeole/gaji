@@ -672,6 +672,8 @@ private struct SidebarView: View {
                 }
             }
             .listStyle(.sidebar)
+            .listSectionSpacing(.compact)
+            .contentMargins(.top, 4, for: .scrollContent)
             .scrollContentBackground(.hidden)
         }
     }
@@ -710,7 +712,6 @@ private struct SidebarView: View {
                     .frame(width: 20, height: 20)
             }
             .buttonStyle(.borderless)
-            .padding(.trailing, 4)
             .help("Add \(title)")
         }
         .frame(height: 24)
@@ -736,11 +737,14 @@ private extension View {
         id: String, isSelected: Bool, hoveredItem: Binding<String?>
     ) -> some View {
         self
-            .background(
-                isSelected
-                    ? Color.accentColor.opacity(0.16)
-                    : hoveredItem.wrappedValue == id ? Color.primary.opacity(0.065) : Color.clear,
-                in: RoundedRectangle(cornerRadius: 7)
+            .listRowBackground(
+                RoundedRectangle(cornerRadius: 7)
+                    .fill(
+                        isSelected
+                            ? Color.accentColor.opacity(0.16)
+                            : hoveredItem.wrappedValue == id
+                                ? Color.primary.opacity(0.065) : Color.clear
+                    )
             )
             .onHover { isHovered in
                 hoveredItem.wrappedValue = isHovered ? id : nil
@@ -766,9 +770,11 @@ private struct WorkingCopyInspector: View {
                             repository.requestDiscard(repository.unstagedChanges.map(\.path))
                         }
                     } label: {
-                        Image(systemName: "ellipsis.circle")
+                        Image(systemName: "ellipsis")
+                            .frame(width: 22, height: 22)
                     }
-                    .menuStyle(.borderlessButton)
+                    .menuIndicator(.hidden)
+                    .buttonStyle(.glass)
                     .fixedSize()
                 }
             }
@@ -795,7 +801,8 @@ private struct WorkingCopyInspector: View {
                     } label: {
                         Label("Options", systemImage: "slider.horizontal.3")
                     }
-                    .menuStyle(.borderlessButton)
+                    .menuIndicator(.hidden)
+                    .buttonStyle(.glass)
                     .fixedSize()
                 }
                 TextField("Summary", text: $repository.commitMessage, axis: .vertical)
@@ -994,6 +1001,7 @@ private struct FileDiffView: View {
                             .padding(.vertical, 7)
                         }
                         .scrollIndicators(.hidden)
+                        .frame(height: 44)
                         .background(.bar)
                         Divider()
                     }
