@@ -49,6 +49,8 @@
             <AppBarButton Icon="Rename" Label="Rename Branch" Click="RenameBranch_Click" />
             <AppBarButton Label="New Branch" Click="NewBranch_Click" />
             <AppBarButton Icon="Delete" Label="Delete Branch" Click="DeleteBranch_Click" />
+            <AppBarButton Icon="Save" Label="Stash" Click="Stash_Click" />
+            <AppBarButton Icon="OpenFile" Label="Pop Stash" Click="PopStash_Click" />
             <AppBarSeparator />
             <AppBarButton Label="Use Current" Click="UseCurrent_Click" IsEnabled="{x:Bind ViewModel.HasSelectedConflict, Mode=OneWay}" />
             <AppBarButton Label="Use Incoming" Click="UseIncoming_Click" IsEnabled="{x:Bind ViewModel.HasSelectedConflict, Mode=OneWay}" />
@@ -85,6 +87,11 @@
                 <NavigationViewItem Content="Submodules" Icon="Folder">
                     <NavigationViewItem.InfoBadge>
                         <InfoBadge Value="{x:Bind ViewModel.SubmoduleCount, Mode=OneWay}" />
+                    </NavigationViewItem.InfoBadge>
+                </NavigationViewItem>
+                <NavigationViewItem Content="Stashes" Icon="Save">
+                    <NavigationViewItem.InfoBadge>
+                        <InfoBadge Value="{x:Bind ViewModel.StashCount, Mode=OneWay}" />
                     </NavigationViewItem.InfoBadge>
                 </NavigationViewItem>
             </NavigationView.MenuItems>

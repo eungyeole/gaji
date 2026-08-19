@@ -28,6 +28,7 @@ public sealed class RepositoryViewModel : INotifyPropertyChanged
     public ObservableCollection<string> RecentRepositories { get; } = [];
     private ObservableCollection<CoreWorktree> Worktrees { get; } = [];
     private ObservableCollection<CoreSubmodule> Submodules { get; } = [];
+    private ObservableCollection<CoreStash> Stashes { get; } = [];
     public string RepositoryName { get => repositoryName; private set => Set(ref repositoryName, value); }
     public string Branch { get => branch; private set => Set(ref branch, value); }
     public string DetailTitle { get => detailTitle; private set => Set(ref detailTitle, value); }
@@ -43,6 +44,7 @@ public sealed class RepositoryViewModel : INotifyPropertyChanged
     public bool HasSelectedCommit => selectedCommit is not null;
     public int WorktreeCount => Worktrees.Count;
     public int SubmoduleCount => Submodules.Count;
+    public int StashCount => Stashes.Count;
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -104,8 +106,11 @@ public sealed class RepositoryViewModel : INotifyPropertyChanged
             foreach (var worktree in NativeCore.Worktrees(root)) Worktrees.Add(worktree);
             Submodules.Clear();
             foreach (var submodule in NativeCore.Submodules(root)) Submodules.Add(submodule);
+            Stashes.Clear();
+            foreach (var stash in NativeCore.Stashes(root)) Stashes.Add(stash);
             OnPropertyChanged(nameof(WorktreeCount));
             OnPropertyChanged(nameof(SubmoduleCount));
+            OnPropertyChanged(nameof(StashCount));
             OnPropertyChanged(nameof(ChangeCount));
         }
         catch (Exception error)
@@ -200,6 +205,18 @@ public sealed class RepositoryViewModel : INotifyPropertyChanged
     {
         if (root is not null)
             RunNative(new { action = "updateSubmodules", path = root, initialize = true });
+    }
+
+    public void StashAll()
+    {
+        if (root is not null)
+            RunNative(new { action = "stashPush", path = root, message = "Rift stash", includeUntracked = true });
+    }
+
+    public void PopLatestStash()
+    {
+        if (root is not null && Stashes.Count > 0)
+            RunNative(new { action = "stashApply", path = root, index = 0, pop = true });
     }
 
     public void Commit()

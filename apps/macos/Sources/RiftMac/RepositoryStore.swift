@@ -48,7 +48,7 @@ final class RepositoryStore {
     private(set) var commits: [Commit] = []
     private(set) var branches: [String] = []
     private(set) var remotes: [String] = []
-    private(set) var stashes: [String] = []
+    private(set) var stashes: [CoreStash] = []
     private(set) var tags: [String] = []
     private(set) var operation: GitOperation?
     private(set) var conflicts: [String] = []
@@ -205,8 +205,7 @@ final class RepositoryStore {
             branches = try git(at: root, "branch", "--format=%(refname:short)")
                 .split(separator: "\n").map(String.init)
             remotes = try git(at: root, "remote").split(separator: "\n").map(String.init)
-            stashes = try git(at: root, "stash", "list", "--format=%gd %s")
-                .split(separator: "\n").map(String.init)
+            stashes = (try? CoreBridge.stashes(root.path())) ?? []
             tags = try git(at: root, "tag", "--list").split(separator: "\n").map(String.init)
             worktrees = (try? CoreBridge.worktrees(root.path())) ?? []
             submodules = (try? CoreBridge.submodules(root.path())) ?? []
@@ -437,6 +436,12 @@ final class RepositoryStore {
     }
     func popStash() {
         runCore(["action": "stashApply", "path": rootPath, "index": 0, "pop": true])
+    }
+    func applyStash(_ index: Int, pop: Bool) {
+        runCore(["action": "stashApply", "path": rootPath, "index": index, "pop": pop])
+    }
+    func dropStash(_ index: Int) {
+        runCore(["action": "stashDrop", "path": rootPath, "index": index])
     }
     func revert(_ commit: Commit) {
         runCore(["action": "revert", "path": rootPath, "target": commit.id])

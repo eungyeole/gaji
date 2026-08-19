@@ -19,6 +19,7 @@ char *rift_blame_json(const char *path, const char *file);
 char *rift_file_history_json(const char *path, const char *file);
 char *rift_worktrees_json(const char *path);
 char *rift_submodules_json(const char *path);
+char *rift_stashes_json(const char *path);
 char *rift_execute_json(const char *request);
 void rift_string_free(char *value);
 

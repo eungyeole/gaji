@@ -84,7 +84,13 @@ struct ContentView: View {
                         .disabled(repository.stashes.isEmpty)
                     if !repository.stashes.isEmpty {
                         Divider()
-                        ForEach(repository.stashes, id: \.self) { Text($0) }
+                        ForEach(repository.stashes) { stash in
+                            Menu(stash.subject) {
+                                Button("Apply") { repository.applyStash(stash.index, pop: false) }
+                                Button("Pop") { repository.applyStash(stash.index, pop: true) }
+                                Button("Drop", role: .destructive) { repository.dropStash(stash.index) }
+                            }
+                        }
                     }
                 } label: {
                     Label("Stash", systemImage: "shippingbox")

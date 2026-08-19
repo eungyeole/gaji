@@ -30,6 +30,9 @@ internal static class NativeCore
     private static extern nint rift_submodules_json([MarshalAs(UnmanagedType.LPUTF8Str)] string path);
 
     [DllImport("rift_ffi", CallingConvention = CallingConvention.Cdecl)]
+    private static extern nint rift_stashes_json([MarshalAs(UnmanagedType.LPUTF8Str)] string path);
+
+    [DllImport("rift_ffi", CallingConvention = CallingConvention.Cdecl)]
     private static extern void rift_string_free(nint value);
 
     public static CoreSnapshot Inspect(string path) => Decode<CoreSnapshot>(rift_inspect_json(path));
@@ -39,6 +42,7 @@ internal static class NativeCore
         Decode<CoreBlameLine[]>(rift_blame_json(path, file));
     public static CoreWorktree[] Worktrees(string path) => Decode<CoreWorktree[]>(rift_worktrees_json(path));
     public static CoreSubmodule[] Submodules(string path) => Decode<CoreSubmodule[]>(rift_submodules_json(path));
+    public static CoreStash[] Stashes(string path) => Decode<CoreStash[]>(rift_stashes_json(path));
 
     public static void Execute(object request)
     {
@@ -77,3 +81,4 @@ internal sealed record CoreGraphCommit(
 internal sealed record CoreBlameLine(int LineNumber, string Commit, string Author, long AuthoredAt, string Content);
 internal sealed record CoreWorktree(string Path, string Commit, string? Branch, bool IsBare);
 internal sealed record CoreSubmodule(string Path, string Commit, char State);
+internal sealed record CoreStash(int Index, string Reference, string Subject);

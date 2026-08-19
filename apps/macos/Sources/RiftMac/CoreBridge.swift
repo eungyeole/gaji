@@ -79,6 +79,13 @@ struct CoreSubmodule: Decodable, Identifiable {
     var id: String { path }
 }
 
+struct CoreStash: Decodable, Identifiable {
+    let index: Int
+    let reference: String
+    let subject: String
+    var id: String { reference }
+}
+
 private struct CoreEnvelope<Value: Decodable>: Decodable {
     let ok: Bool
     let value: Value?
@@ -144,6 +151,10 @@ enum CoreBridge {
 
     static func submodules(_ path: String) throws -> [CoreSubmodule] {
         try decode(path.withCString(rift_submodules_json), as: [CoreSubmodule].self)
+    }
+
+    static func stashes(_ path: String) throws -> [CoreStash] {
+        try decode(path.withCString(rift_stashes_json), as: [CoreStash].self)
     }
 
     static func execute(_ request: [String: Any]) throws {

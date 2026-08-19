@@ -355,6 +355,19 @@ pub unsafe extern "C" fn rift_submodules_json(path: *const c_char) -> *mut c_cha
 }
 
 #[unsafe(no_mangle)]
+/// Lists stashed worktree snapshots.
+///
+/// # Safety
+/// `path` must be null or point to a valid, NUL-terminated C string. The return
+/// value must be released exactly once with [`rift_string_free`].
+pub unsafe extern "C" fn rift_stashes_json(path: *const c_char) -> *mut c_char {
+    respond(|| {
+        let path = unsafe { required_string(path, "path")? };
+        rift_core::stashes(path).map_err(|error| error.to_string())
+    })
+}
+
+#[unsafe(no_mangle)]
 /// Executes a JSON-encoded request and returns an owned UTF-8 JSON response.
 ///
 /// # Safety

@@ -68,6 +68,8 @@ public sealed partial class MainWindow : Window
     private void UseIncoming_Click(object sender, RoutedEventArgs e) => ViewModel.ResolveSelected("--theirs");
     private void Blame_Click(object sender, RoutedEventArgs e) => ViewModel.ShowBlame();
     private void UpdateSubmodules_Click(object sender, RoutedEventArgs e) => ViewModel.UpdateSubmodules();
+    private void Stash_Click(object sender, RoutedEventArgs e) => ViewModel.StashAll();
+    private void PopStash_Click(object sender, RoutedEventArgs e) => ViewModel.PopLatestStash();
 
     private async void AddWorktree_Click(object sender, RoutedEventArgs e)
     {
