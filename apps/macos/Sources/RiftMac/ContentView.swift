@@ -195,36 +195,36 @@ struct ContentView: View {
         .navigationTitle(repository.title)
         .toolbar {
             ToolbarItem {
-                ControlGroup {
-                    Menu {
-                        Section("Pull Strategy") {
-                            ForEach(PullBehavior.allCases, id: \.self) { behavior in
-                                Button {
-                                    repository.pull(behavior)
-                                } label: {
-                                    if repository.pullBehavior == behavior {
-                                        Label(behavior.title, systemImage: "checkmark")
-                                    } else {
-                                        Text(behavior.title)
-                                    }
+                Menu {
+                    Section("Pull Strategy") {
+                        ForEach(PullBehavior.allCases, id: \.self) { behavior in
+                            Button {
+                                repository.pull(behavior)
+                            } label: {
+                                if repository.pullBehavior == behavior {
+                                    Label(behavior.title, systemImage: "checkmark")
+                                } else {
+                                    Text(behavior.title)
                                 }
                             }
                         }
-                        Divider()
-                        Button("Fetch All", action: repository.fetch)
-                        Button("Refresh View", action: repository.refresh)
-                    } label: {
-                        Label("Pull", systemImage: "arrow.down.to.line")
-                    } primaryAction: {
-                        repository.pull()
                     }
-                    .help("Pull using \(repository.pullBehavior.title)")
-                    .disabled(repository.root == nil || repository.isBusy)
-                    Button(action: repository.push) {
-                        Label("Push", systemImage: "arrow.up.to.line")
-                    }
-                    .disabled(repository.root == nil || repository.isBusy)
+                    Divider()
+                    Button("Fetch All", action: repository.fetch)
+                    Button("Refresh View", action: repository.refresh)
+                } label: {
+                    Label("Pull", systemImage: "arrow.down.to.line")
+                } primaryAction: {
+                    repository.pull()
                 }
+                .help("Pull using \(repository.pullBehavior.title)")
+                .disabled(repository.root == nil || repository.isBusy)
+            }
+            ToolbarItem {
+                Button(action: repository.push) {
+                    Label("Push", systemImage: "arrow.up.to.line")
+                }
+                .disabled(repository.root == nil || repository.isBusy)
             }
             ToolbarItem {
                 ControlGroup {
