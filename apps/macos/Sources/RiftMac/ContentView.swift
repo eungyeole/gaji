@@ -969,12 +969,7 @@ private struct WorkingCopyInspector: View {
 
         VStack(spacing: RiftUI.sectionSpacing) {
             HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Working Copy").font(.headline)
-                    Text("\(repository.unstagedChanges.count) unstaged · \(repository.stagedChanges.count) staged")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                Text("Working Copy").font(.headline)
                 Spacer()
                 if !repository.unstagedChanges.isEmpty {
                     Menu {
@@ -1056,11 +1051,12 @@ private struct CommitInspector: View {
                     repository.closeFileDetails()
                     repository.selection = nil
                 } label: {
-                    Label("Changes", systemImage: "chevron.left")
+                    Label("Back to Changes", systemImage: "chevron.left")
+                        .labelStyle(.iconOnly)
                 }
                 .buttonStyle(.borderless)
+                .help("Back to Changes")
                 Spacer()
-                Text("Commit Details").font(.headline)
             }
             .padding(.horizontal, 4)
             .frame(height: RiftUI.headerHeight)
@@ -1083,7 +1079,7 @@ private struct CommitInspector: View {
                 .overlay(alignment: .bottom) { Divider() }
             }
             HStack {
-                Text("Changed Files").font(.subheadline.weight(.semibold))
+                Text("Files").font(.subheadline.weight(.semibold))
                 Text("\(repository.selectedCommitFiles.count)")
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
@@ -1128,13 +1124,7 @@ private struct CommitFileRow: View {
     var body: some View {
         HStack(spacing: 8) {
             StatusBadge(status: change.status)
-            VStack(alignment: .leading, spacing: 1) {
-                Text((change.path as NSString).lastPathComponent).lineLimit(1)
-                let parent = (change.path as NSString).deletingLastPathComponent
-                if !parent.isEmpty && parent != "." {
-                    Text(parent).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
-                }
-            }
+            Text(change.path).lineLimit(1)
             Spacer(minLength: 4)
             Image(systemName: "chevron.right")
                 .font(.caption2.weight(.semibold))
@@ -1227,14 +1217,9 @@ private struct ChangeFileRow: View {
     var body: some View {
         HStack(spacing: 8) {
             StatusBadge(status: change.statusLabel)
-            VStack(alignment: .leading, spacing: 1) {
-                Text((change.path as NSString).lastPathComponent).lineLimit(1)
-                let parent = (change.path as NSString).deletingLastPathComponent
-                if !parent.isEmpty && parent != "." {
-                    Text(parent).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            Text(change.path)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
             Button {
                 staged ? repository.unstage(change.path) : repository.stage(change.path)
             } label: {
@@ -1307,8 +1292,12 @@ private struct FileDiffView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Button("History", action: repository.closeFileDetails)
+                Button(action: repository.closeFileDetails) {
+                    Label("Back to History", systemImage: "chevron.left")
+                        .labelStyle(.iconOnly)
+                }
                     .buttonStyle(.borderless)
+                    .help("Back to History")
                 Divider().frame(height: 18)
                 Text(repository.selectedFile ?? "Diff").font(.headline)
                 Spacer()
@@ -1327,7 +1316,7 @@ private struct FileDiffView: View {
             .frame(height: 44)
             Divider()
             if repository.selectedFileIsLoading {
-                ProgressView("Loading diff…")
+                ProgressView()
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if repository.selectedFileDiff.isEmpty {
                 ContentUnavailableView("No Text Diff", systemImage: "doc",
