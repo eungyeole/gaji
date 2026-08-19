@@ -1,0 +1,6 @@
+/target
+/.idea
+/.vscode
+*.xcuserstate
+DerivedData/
+.DS_Store
