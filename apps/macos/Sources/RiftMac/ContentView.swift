@@ -267,6 +267,29 @@ struct ContentView: View {
             .padding(20)
             .frame(minWidth: 900, minHeight: 620)
         }
+        .sheet(isPresented: $repository.showsAddWorktree) {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Add Worktree").font(.title2.bold())
+                Picker("Branch", selection: $repository.worktreeBranch) {
+                    Text("Choose a branch").tag("")
+                    ForEach(repository.branches, id: \.self) { Text($0).tag($0) }
+                }
+                HStack {
+                    TextField("Destination", text: $repository.worktreeDestination)
+                        .textFieldStyle(.roundedBorder)
+                    Button("Choose…", action: repository.chooseWorktreeDestination)
+                }
+                HStack {
+                    Spacer()
+                    Button("Cancel") { repository.showsAddWorktree = false }
+                    Button("Add", action: repository.addWorktree)
+                        .buttonStyle(.glassProminent)
+                        .disabled(repository.worktreeBranch.isEmpty || repository.worktreeDestination.isEmpty)
+                }
+            }
+            .padding(24)
+            .frame(width: 540)
+        }
         .sheet(isPresented: Binding(
             get: { repository.conflictFile != nil },
             set: { if !$0 { repository.conflictFile = nil } }
@@ -496,6 +519,29 @@ private struct SidebarView: View {
                                 Button("Push Tag") { repository.pushTag(tag) }
                                 Button("Delete", role: .destructive) { repository.deleteTag(tag) }
                             }
+                    }
+                }
+                Section("Worktrees") {
+                    ForEach(repository.worktrees) { worktree in
+                        Label(worktree.branch ?? URL(fileURLWithPath: worktree.path).lastPathComponent,
+                              systemImage: "square.stack.3d.up")
+                            .help(worktree.path)
+                            .contextMenu {
+                                Button("Open") { repository.open(URL(fileURLWithPath: worktree.path)) }
+                                if worktree.path != repository.root?.path() {
+                                    Button("Remove", role: .destructive) { repository.removeWorktree(worktree.path) }
+                                }
+                            }
+                    }
+                    Button("Add Worktree…") { repository.showsAddWorktree = true }
+                }
+                if !repository.submodules.isEmpty {
+                    Section("Submodules") {
+                        ForEach(repository.submodules) { submodule in
+                            Label(submodule.path, systemImage: "shippingbox.and.arrow.backward")
+                                .help(String(submodule.commit.prefix(12)))
+                        }
+                        Button("Update Submodules", action: repository.updateSubmodules)
                     }
                 }
             }

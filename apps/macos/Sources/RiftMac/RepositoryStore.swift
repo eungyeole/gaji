@@ -86,6 +86,11 @@ final class RepositoryStore {
     var blameLines: [CoreBlameLine] = []
     var fileHistory: [CoreHistoryEntry] = []
     private(set) var recentRepositories: [String] = []
+    private(set) var worktrees: [CoreWorktree] = []
+    private(set) var submodules: [CoreSubmodule] = []
+    var showsAddWorktree = false
+    var worktreeDestination = ""
+    var worktreeBranch = ""
 
     var title: String { root?.lastPathComponent ?? "Rift" }
 
@@ -200,6 +205,8 @@ final class RepositoryStore {
             stashes = try git(at: root, "stash", "list", "--format=%gd %s")
                 .split(separator: "\n").map(String.init)
             tags = try git(at: root, "tag", "--list").split(separator: "\n").map(String.init)
+            worktrees = (try? CoreBridge.worktrees(root.path())) ?? []
+            submodules = (try? CoreBridge.submodules(root.path())) ?? []
             let state = try CoreBridge.operationState(root.path())
             operation = switch state.operation {
             case "cherryPick": .cherryPick
@@ -344,6 +351,36 @@ final class RepositoryStore {
     func pushTag(_ name: String) {
         guard let remote = remotes.first else { return }
         runCore(["action": "pushTag", "path": rootPath, "remote": remote, "name": name])
+    }
+
+    func chooseWorktreeDestination() {
+        let panel = NSSavePanel()
+        panel.title = "Add Worktree"
+        panel.prompt = "Choose"
+        panel.canCreateDirectories = true
+        panel.nameFieldStringValue = worktreeBranch.isEmpty ? "worktree" : worktreeBranch
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        worktreeDestination = url.path()
+    }
+
+    func addWorktree() {
+        guard !worktreeDestination.isEmpty, !worktreeBranch.isEmpty else { return }
+        showsAddWorktree = false
+        runCore([
+            "action": "addWorktree", "path": rootPath,
+            "destination": worktreeDestination, "branch": worktreeBranch
+        ])
+    }
+
+    func removeWorktree(_ path: String) {
+        runCore([
+            "action": "removeWorktree", "path": rootPath,
+            "destination": path, "force": false
+        ])
+    }
+
+    func updateSubmodules() {
+        runCore(["action": "updateSubmodules", "path": rootPath, "initialize": true])
     }
 
     func createBranch() {

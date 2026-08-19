@@ -101,6 +101,20 @@ enum Request {
         remote: String,
         name: String,
     },
+    AddWorktree {
+        path: String,
+        destination: String,
+        branch: String,
+    },
+    RemoveWorktree {
+        path: String,
+        destination: String,
+        force: bool,
+    },
+    UpdateSubmodules {
+        path: String,
+        initialize: bool,
+    },
     Fetch {
         path: String,
         remote: String,
@@ -424,6 +438,19 @@ fn execute(request: Request) -> Result<(), String> {
         } => rift_core::create_tag(path, &name, &target, message.as_deref()),
         Request::DeleteTag { path, name } => rift_core::delete_tag(path, &name),
         Request::PushTag { path, remote, name } => rift_core::push_tag(path, &remote, &name),
+        Request::AddWorktree {
+            path,
+            destination,
+            branch,
+        } => rift_core::add_worktree(path, destination, &branch),
+        Request::RemoveWorktree {
+            path,
+            destination,
+            force,
+        } => rift_core::remove_worktree(path, destination, force),
+        Request::UpdateSubmodules { path, initialize } => {
+            rift_core::update_submodules(path, initialize)
+        }
         Request::Fetch {
             path,
             remote,

@@ -26,6 +26,8 @@ public sealed class RepositoryViewModel : INotifyPropertyChanged
     public ObservableCollection<string> Branches { get; } = [];
     public ObservableCollection<string> Tags { get; } = [];
     public ObservableCollection<string> RecentRepositories { get; } = [];
+    private ObservableCollection<CoreWorktree> Worktrees { get; } = [];
+    private ObservableCollection<CoreSubmodule> Submodules { get; } = [];
     public string RepositoryName { get => repositoryName; private set => Set(ref repositoryName, value); }
     public string Branch { get => branch; private set => Set(ref branch, value); }
     public string DetailTitle { get => detailTitle; private set => Set(ref detailTitle, value); }
@@ -39,6 +41,8 @@ public sealed class RepositoryViewModel : INotifyPropertyChanged
     public bool HasSelectedConflict => selectedChange?.IsConflict == true;
     public bool HasSelectedFile => selectedChange is not null;
     public bool HasSelectedCommit => selectedCommit is not null;
+    public int WorktreeCount => Worktrees.Count;
+    public int SubmoduleCount => Submodules.Count;
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -96,6 +100,12 @@ public sealed class RepositoryViewModel : INotifyPropertyChanged
             foreach (var commit in NativeCore.Graph(root))
                 allCommits.Add(new(commit.Id, commit.Author, commit.Subject, commit.Parents, commit.References));
             foreach (var commit in allCommits) Commits.Add(commit);
+            Worktrees.Clear();
+            foreach (var worktree in NativeCore.Worktrees(root)) Worktrees.Add(worktree);
+            Submodules.Clear();
+            foreach (var submodule in NativeCore.Submodules(root)) Submodules.Add(submodule);
+            OnPropertyChanged(nameof(WorktreeCount));
+            OnPropertyChanged(nameof(SubmoduleCount));
             OnPropertyChanged(nameof(ChangeCount));
         }
         catch (Exception error)
@@ -160,6 +170,18 @@ public sealed class RepositoryViewModel : INotifyPropertyChanged
                 $"{line.LineNumber,5} {line.Commit[..Math.Min(8, line.Commit.Length)]} {line.Author,-18} {line.Content}"));
         }
         catch (Exception error) { DetailTitle = "Git error"; DetailText = error.Message; }
+    }
+
+    public void AddWorktree(string destination, string branchName)
+    {
+        if (root is not null)
+            RunNative(new { action = "addWorktree", path = root, destination, branch = branchName });
+    }
+
+    public void UpdateSubmodules()
+    {
+        if (root is not null)
+            RunNative(new { action = "updateSubmodules", path = root, initialize = true });
     }
 
     public void Commit()

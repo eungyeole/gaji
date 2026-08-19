@@ -67,6 +67,19 @@ public sealed partial class MainWindow : Window
     private void UseCurrent_Click(object sender, RoutedEventArgs e) => ViewModel.ResolveSelected("--ours");
     private void UseIncoming_Click(object sender, RoutedEventArgs e) => ViewModel.ResolveSelected("--theirs");
     private void Blame_Click(object sender, RoutedEventArgs e) => ViewModel.ShowBlame();
+    private void UpdateSubmodules_Click(object sender, RoutedEventArgs e) => ViewModel.UpdateSubmodules();
+
+    private async void AddWorktree_Click(object sender, RoutedEventArgs e)
+    {
+        var branches = new ComboBox { Header = "Branch", ItemsSource = ViewModel.Branches };
+        var dialog = new ContentDialog {
+            XamlRoot = Content.XamlRoot, Title = "Add Worktree", Content = branches,
+            PrimaryButtonText = "Next", CloseButtonText = "Cancel"
+        };
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary || branches.SelectedItem is not string branch) return;
+        var parent = await PickFolder("Choose the worktree parent folder");
+        if (parent is not null) ViewModel.AddWorktree(Path.Combine(parent.Path, branch), branch);
+    }
 
     private async void CreateTag_Click(object sender, RoutedEventArgs e)
     {

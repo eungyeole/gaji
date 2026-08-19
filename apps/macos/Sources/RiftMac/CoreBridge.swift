@@ -64,6 +64,21 @@ struct CoreHistoryEntry: Decodable, Identifiable {
     let subject: String
 }
 
+struct CoreWorktree: Decodable, Identifiable {
+    let path: String
+    let commit: String
+    let branch: String?
+    let isBare: Bool
+    var id: String { path }
+}
+
+struct CoreSubmodule: Decodable, Identifiable {
+    let path: String
+    let commit: String
+    let state: Character
+    var id: String { path }
+}
+
 private struct CoreEnvelope<Value: Decodable>: Decodable {
     let ok: Bool
     let value: Value?
@@ -121,6 +136,14 @@ enum CoreBridge {
             file.withCString { filePointer in rift_file_history_json(pathPointer, filePointer) }
         }
         return try decode(pointer, as: [CoreHistoryEntry].self)
+    }
+
+    static func worktrees(_ path: String) throws -> [CoreWorktree] {
+        try decode(path.withCString(rift_worktrees_json), as: [CoreWorktree].self)
+    }
+
+    static func submodules(_ path: String) throws -> [CoreSubmodule] {
+        try decode(path.withCString(rift_submodules_json), as: [CoreSubmodule].self)
     }
 
     static func execute(_ request: [String: Any]) throws {

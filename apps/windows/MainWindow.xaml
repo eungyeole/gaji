@@ -44,6 +44,8 @@
             <AppBarButton Icon="World" Label="Add Remote" Click="AddRemote_Click" />
             <AppBarButton Icon="Contact" Label="Blame" Click="Blame_Click"
                           IsEnabled="{x:Bind ViewModel.HasSelectedFile, Mode=OneWay}" />
+            <AppBarButton Icon="Library" Label="Add Worktree" Click="AddWorktree_Click" />
+            <AppBarButton Icon="SyncFolder" Label="Submodules" Click="UpdateSubmodules_Click" />
             <AppBarSeparator />
             <AppBarButton Label="Use Current" Click="UseCurrent_Click" IsEnabled="{x:Bind ViewModel.HasSelectedConflict, Mode=OneWay}" />
             <AppBarButton Label="Use Incoming" Click="UseIncoming_Click" IsEnabled="{x:Bind ViewModel.HasSelectedConflict, Mode=OneWay}" />
@@ -70,6 +72,16 @@
                 <NavigationViewItem Content="Changes" Icon="Edit">
                     <NavigationViewItem.InfoBadge>
                         <InfoBadge Value="{x:Bind ViewModel.ChangeCount, Mode=OneWay}" />
+                    </NavigationViewItem.InfoBadge>
+                </NavigationViewItem>
+                <NavigationViewItem Content="Worktrees" Icon="Library">
+                    <NavigationViewItem.InfoBadge>
+                        <InfoBadge Value="{x:Bind ViewModel.WorktreeCount, Mode=OneWay}" />
+                    </NavigationViewItem.InfoBadge>
+                </NavigationViewItem>
+                <NavigationViewItem Content="Submodules" Icon="Folder">
+                    <NavigationViewItem.InfoBadge>
+                        <InfoBadge Value="{x:Bind ViewModel.SubmoduleCount, Mode=OneWay}" />
                     </NavigationViewItem.InfoBadge>
                 </NavigationViewItem>
             </NavigationView.MenuItems>
