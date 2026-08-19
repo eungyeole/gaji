@@ -1091,18 +1091,10 @@ private struct CommitList: View {
         List(rows, selection: $selection) { row in
             let commit = row.commit
             HStack(spacing: 8) {
+                CommitReferences(references: commit.references)
                 CommitGraph(row: row, width: graphWidth)
-                CommitAvatar(commit: commit)
-                ForEach(commit.references.prefix(3), id: \.self) { reference in
-                    Text(reference.replacingOccurrences(of: "HEAD -> ", with: ""))
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(reference.hasPrefix("tag: ") ? Color.orange : Color.accentColor)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 2)
-                        .background(Color.accentColor.opacity(0.1), in: Capsule())
-                        .fixedSize()
-                }
                 Text(commit.subject)
+                    .foregroundStyle(.primary)
                     .fontWeight(.medium)
                     .lineLimit(1)
                     .layoutPriority(1)
@@ -1142,30 +1134,64 @@ private struct CommitList: View {
     }
 }
 
+private struct CommitReferences: View {
+    let references: [String]
+
+    var body: some View {
+        HStack(spacing: 3) {
+            if let reference = references.first {
+                Text(clean(reference))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
+                    .background(reference.hasPrefix("tag: ") ? Color.orange : Color.accentColor, in: Capsule())
+                if references.count > 1 {
+                    Text("+\(references.count - 1)")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .frame(width: 118, alignment: .trailing)
+        .help(references.joined(separator: "\n"))
+    }
+
+    private func clean(_ reference: String) -> String {
+        reference
+            .replacingOccurrences(of: "HEAD -> ", with: "")
+            .replacingOccurrences(of: "tag: ", with: "")
+    }
+}
+
 private struct CommitAvatar: View {
     let commit: Commit
 
     var body: some View {
         AsyncImage(url: avatarURL) { phase in
             if case let .success(image) = phase {
-                image.resizable().scaledToFill()
+                image
+                    .resizable()
+                    .scaledToFill()
+                    .background(.background, in: Circle())
+                    .clipShape(Circle())
+                    .overlay(Circle().stroke(Color.accentColor, lineWidth: 1.5))
             } else {
-                Circle()
-                    .fill(Color.accentColor.opacity(0.18))
-                    .overlay {
-                        Text(String(commit.author.prefix(1)).uppercased())
-                            .font(.system(size: 9, weight: .semibold))
-                            .foregroundStyle(.tint)
-                    }
+                Color.clear
             }
         }
         .frame(width: 18, height: 18)
-        .clipShape(Circle())
     }
 
     private var avatarURL: URL? {
         let email = commit.authorEmail.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !email.isEmpty else { return nil }
+        if email.hasSuffix("@users.noreply.github.com") {
+            let local = email.split(separator: "@", maxSplits: 1).first.map(String.init) ?? ""
+            let username = local.split(separator: "+").last.map(String.init) ?? local
+            if !username.isEmpty { return URL(string: "https://github.com/\(username).png?size=48") }
+        }
         let digest = Insecure.MD5.hash(data: Data(email.utf8)).map { String(format: "%02x", $0) }.joined()
         return URL(string: "https://www.gravatar.com/avatar/\(digest)?d=404&s=48")
     }
@@ -1199,42 +1225,48 @@ private struct CommitGraph: View {
     private let colors: [Color] = [.blue, .purple, .orange, .green, .pink, .cyan, .indigo, .mint]
 
     var body: some View {
-        Canvas { context, size in
-            let centerY = size.height / 2
-            let color = colors[row.nodeLane % colors.count]
+        ZStack(alignment: .topLeading) {
+            Canvas { context, size in
+                let centerY = size.height / 2
+                let color = colors[row.nodeLane % colors.count]
 
-            for (topLane, hash) in row.topLanes.enumerated() where hash != row.commit.id {
-                guard let bottomLane = row.bottomLanes.firstIndex(of: hash) else { continue }
-                var path = Path()
-                path.move(to: point(topLane, -1))
-                path.addCurve(
-                    to: point(bottomLane, size.height + 1),
-                    control1: point(topLane, size.height * 0.45),
-                    control2: point(bottomLane, size.height * 0.55)
-                )
-                context.stroke(path, with: .color(colors[topLane % colors.count].opacity(0.72)), lineWidth: 2)
+                for (topLane, hash) in row.topLanes.enumerated() where hash != row.commit.id {
+                    guard let bottomLane = row.bottomLanes.firstIndex(of: hash) else { continue }
+                    var path = Path()
+                    path.move(to: point(topLane, -1))
+                    path.addCurve(
+                        to: point(bottomLane, size.height + 1),
+                        control1: point(topLane, size.height * 0.45),
+                        control2: point(bottomLane, size.height * 0.55)
+                    )
+                    context.stroke(path, with: .color(colors[topLane % colors.count].opacity(0.72)), lineWidth: 2)
+                }
+
+                var incoming = Path()
+                incoming.move(to: point(row.nodeLane, -1))
+                incoming.addLine(to: point(row.nodeLane, centerY))
+                context.stroke(incoming, with: .color(color), lineWidth: 2)
+
+                for parent in row.commit.parents {
+                    guard let lane = row.bottomLanes.firstIndex(of: parent) else { continue }
+                    var path = Path()
+                    path.move(to: point(row.nodeLane, centerY))
+                    path.addCurve(
+                        to: point(lane, size.height + 1),
+                        control1: point(row.nodeLane, size.height * 0.55),
+                        control2: point(lane, size.height * 0.72)
+                    )
+                    context.stroke(path, with: .color(colors[lane % colors.count]), lineWidth: 2)
+                }
+
+                let node = CGRect(x: x(row.nodeLane) - 5, y: centerY - 5, width: 10, height: 10)
+                context.fill(Path(ellipseIn: node), with: .color(color))
+                context.stroke(Path(ellipseIn: node), with: .color(.white.opacity(0.75)), lineWidth: 1.5)
             }
-
-            var incoming = Path()
-            incoming.move(to: point(row.nodeLane, -1))
-            incoming.addLine(to: point(row.nodeLane, centerY))
-            context.stroke(incoming, with: .color(color), lineWidth: 2)
-
-            for parent in row.commit.parents {
-                guard let lane = row.bottomLanes.firstIndex(of: parent) else { continue }
-                var path = Path()
-                path.move(to: point(row.nodeLane, centerY))
-                path.addCurve(
-                    to: point(lane, size.height + 1),
-                    control1: point(row.nodeLane, size.height * 0.55),
-                    control2: point(lane, size.height * 0.72)
-                )
-                context.stroke(path, with: .color(colors[lane % colors.count]), lineWidth: 2)
+            if row.commit.parents.count < 2 {
+                CommitAvatar(commit: row.commit)
+                    .offset(x: x(row.nodeLane) - 9, y: 3)
             }
-
-            let node = CGRect(x: x(row.nodeLane) - 5, y: centerY - 5, width: 10, height: 10)
-            context.fill(Path(ellipseIn: node), with: .color(color))
-            context.stroke(Path(ellipseIn: node), with: .color(.white.opacity(0.75)), lineWidth: 1.5)
         }
         .frame(width: max(24, width))
         .frame(height: 24)
