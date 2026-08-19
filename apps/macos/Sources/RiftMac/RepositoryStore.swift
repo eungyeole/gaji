@@ -35,10 +35,18 @@ final class RepositoryStore {
     private(set) var branch = ""
     private(set) var changes: [FileChange] = []
     private(set) var commits: [Commit] = []
+    private(set) var branches: [String] = []
+    private(set) var remotes: [String] = []
+    private(set) var stashes: [String] = []
     private(set) var operation: GitOperation?
     private(set) var conflicts: [String] = []
     var errorMessage: String?
     var selection: Commit.ID?
+    var selectedFile: String?
+    var selectedFileDiff = ""
+    var commitMessage = ""
+    var newBranchName = ""
+    var showsCreateBranch = false
 
     var title: String { root?.lastPathComponent ?? "Rift" }
 
@@ -71,6 +79,11 @@ final class RepositoryStore {
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             changes = parseStatus(try git(at: root, "status", "--porcelain=v1"))
             commits = parseLog(gitAllowingEmptyHistory(at: root))
+            branches = try git(at: root, "branch", "--format=%(refname:short)")
+                .split(separator: "\n").map(String.init)
+            remotes = try git(at: root, "remote").split(separator: "\n").map(String.init)
+            stashes = try git(at: root, "stash", "list", "--format=%gd %s")
+                .split(separator: "\n").map(String.init)
             operation = detectOperation(at: root)
             conflicts = try git(at: root, "diff", "--name-only", "--diff-filter=U")
                 .split(separator: "\n").map(String.init)
@@ -86,6 +99,56 @@ final class RepositoryStore {
     func cherryPick(_ commit: Commit) {
         runOperation("cherry-pick", commit.id)
     }
+
+    func select(_ change: FileChange) {
+        guard let root else { return }
+        selectedFile = change.path
+        let staged = change.indexStatus != " " && change.indexStatus != "?"
+        selectedFileDiff = (try? git(
+            at: root, "diff", staged ? "--cached" : "--no-ext-diff", "--", change.path
+        )) ?? ""
+    }
+
+    func stage(_ file: String) {
+        runOperation("add", "--", file)
+    }
+
+    func unstage(_ file: String) {
+        runOperation("restore", "--staged", "--", file)
+    }
+
+    func discard(_ file: String) {
+        runOperation("restore", "--worktree", "--", file)
+    }
+
+    func createCommit(amend: Bool = false) {
+        let message = commitMessage.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !message.isEmpty else { return }
+        if amend {
+            runOperation("commit", "--amend", "-m", message)
+        } else {
+            runOperation("commit", "-m", message)
+        }
+        if errorMessage == nil { commitMessage = "" }
+    }
+
+    func switchBranch(_ name: String) { runOperation("switch", name) }
+
+    func createBranch() {
+        let name = newBranchName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return }
+        runOperation("switch", "-c", name)
+        if errorMessage == nil {
+            newBranchName = ""
+            showsCreateBranch = false
+        }
+    }
+
+    func fetch() { runOperation("fetch", "--all", "--prune") }
+    func pull() { runOperation("pull", "--rebase") }
+    func push() { runOperation("push") }
+    func stash() { runOperation("stash", "push", "-u", "-m", "Rift stash") }
+    func popStash() { runOperation("stash", "pop") }
 
     func continueOperation() {
         guard let operation else { return }

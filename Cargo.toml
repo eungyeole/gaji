@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/rift-core", "crates/rift-cli"]
+members = ["crates/rift-core", "crates/rift-cli", "crates/rift-ffi"]
 resolver = "2"
 
 [workspace.package]

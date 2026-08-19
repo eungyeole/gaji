@@ -23,7 +23,11 @@ struct ContentView: View {
                         CommitList(selection: $repository.selection)
                             .navigationSplitViewColumnWidth(min: 340, ideal: 430)
                     } detail: {
-                        CommitDetail()
+                        if repository.selectedFile != nil {
+                            FileDiffView()
+                        } else {
+                            CommitDetail()
+                        }
                     }
                 }
             }
@@ -38,7 +42,68 @@ struct ContentView: View {
                 Button(action: repository.chooseRepository) {
                     Label("Open Repository", systemImage: "folder")
                 }
+                Button(action: repository.fetch) {
+                    Label("Fetch", systemImage: "arrow.down.circle")
+                }
+                .disabled(repository.root == nil)
+                Button(action: repository.pull) {
+                    Label("Pull", systemImage: "arrow.down.to.line")
+                }
+                .disabled(repository.root == nil)
+                Button(action: repository.push) {
+                    Label("Push", systemImage: "arrow.up.to.line")
+                }
+                .disabled(repository.root == nil)
+                Menu {
+                    ForEach(repository.branches, id: \.self) { branch in
+                        Button {
+                            repository.switchBranch(branch)
+                        } label: {
+                            if branch == repository.branch {
+                                Label(branch, systemImage: "checkmark")
+                            } else {
+                                Text(branch)
+                            }
+                        }
+                    }
+                    Divider()
+                    Button("New Branch…") { repository.showsCreateBranch = true }
+                } label: {
+                    Label("Branches", systemImage: "arrow.triangle.branch")
+                }
+                .disabled(repository.root == nil)
+                Menu {
+                    Button("Stash All Changes", action: repository.stash)
+                    Button("Pop Latest Stash", action: repository.popStash)
+                        .disabled(repository.stashes.isEmpty)
+                    if !repository.stashes.isEmpty {
+                        Divider()
+                        ForEach(repository.stashes, id: \.self) { Text($0) }
+                    }
+                } label: {
+                    Label("Stash", systemImage: "shippingbox")
+                }
+                .disabled(repository.root == nil)
             }
+        }
+        .sheet(isPresented: $repository.showsCreateBranch) {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Create Branch").font(.title2.bold())
+                TextField("Branch name", text: $repository.newBranchName)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit(repository.createBranch)
+                HStack {
+                    Spacer()
+                    Button("Cancel") { repository.showsCreateBranch = false }
+                        .keyboardShortcut(.cancelAction)
+                    Button("Create and Switch", action: repository.createBranch)
+                        .buttonStyle(.glassProminent)
+                        .keyboardShortcut(.defaultAction)
+                        .disabled(repository.newBranchName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+            .padding(24)
+            .frame(width: 420)
         }
         .alert("Couldn’t Open Repository", isPresented: Binding(
             get: { repository.errorMessage != nil },
@@ -113,20 +178,49 @@ private struct SidebarView: View {
     @Environment(RepositoryStore.self) private var repository
 
     var body: some View {
-        List {
-            Section("Repository") {
-                Label(repository.branch.isEmpty ? "No commits yet" : repository.branch,
-                      systemImage: "arrow.triangle.branch")
-                Label("History", systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90")
-            }
-            Section("Working Copy") {
-                Label("Changes", systemImage: "square.and.pencil").badge(repository.changes.count)
-                ForEach(repository.changes.prefix(20)) { change in
-                    Label(change.path, systemImage: icon(for: change.statusLabel)).help(change.path)
+        @Bindable var repository = repository
+
+        VStack(spacing: 0) {
+            List {
+                Section("Repository") {
+                    Label(repository.branch.isEmpty ? "No commits yet" : repository.branch,
+                          systemImage: "arrow.triangle.branch")
+                    Label("History", systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90")
+                }
+                Section("Working Copy") {
+                    Label("Changes", systemImage: "square.and.pencil").badge(repository.changes.count)
+                    ForEach(repository.changes.prefix(100)) { change in
+                        Button { repository.select(change) } label: {
+                            Label(change.path, systemImage: icon(for: change.statusLabel))
+                        }
+                        .buttonStyle(.plain)
+                        .help(change.path)
+                        .contextMenu {
+                            if change.indexStatus == " " || change.indexStatus == "?" {
+                                Button("Stage") { repository.stage(change.path) }
+                            } else {
+                                Button("Unstage") { repository.unstage(change.path) }
+                            }
+                            if change.worktreeStatus != " " && change.worktreeStatus != "?" {
+                                Button("Discard Changes", role: .destructive) { repository.discard(change.path) }
+                            }
+                        }
+                    }
                 }
             }
+            .listStyle(.sidebar)
+            Divider()
+            VStack(alignment: .leading, spacing: 8) {
+                TextField("Commit message", text: $repository.commitMessage, axis: .vertical)
+                    .lineLimit(2...5)
+                    .textFieldStyle(.roundedBorder)
+                Button("Commit to \(repository.branch)") { repository.createCommit() }
+                    .buttonStyle(.glassProminent)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .disabled(repository.commitMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+            .padding(10)
         }
-        .listStyle(.sidebar)
     }
 
     private func icon(for status: String) -> String {
@@ -135,6 +229,37 @@ private struct SidebarView: View {
         case "D": "minus.circle"
         case "R": "arrow.right.circle"
         default: "pencil.circle"
+        }
+    }
+}
+
+private struct FileDiffView: View {
+    @Environment(RepositoryStore.self) private var repository
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Image(systemName: "doc.text")
+                Text(repository.selectedFile ?? "Diff").font(.headline)
+                Spacer()
+                if let file = repository.selectedFile {
+                    Button("Stage") { repository.stage(file) }
+                }
+            }
+            .padding()
+            Divider()
+            if repository.selectedFileDiff.isEmpty {
+                ContentUnavailableView("No Text Diff", systemImage: "doc",
+                    description: Text("The file may be untracked, binary, or unchanged in this comparison."))
+            } else {
+                ScrollView([.horizontal, .vertical]) {
+                    Text(repository.selectedFileDiff)
+                        .font(.system(.body, design: .monospaced))
+                        .textSelection(.enabled)
+                        .padding()
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
         }
     }
 }

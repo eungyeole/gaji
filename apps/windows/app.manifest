@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
+  <assemblyIdentity version="1.0.0.0" name="Rift.Windows" />
+  <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
+    <application>
+      <maxversiontested Id="10.0.26100.0" />
+      <supportedOS Id="{4f476546-937d-4f3d-8cbe-4fa73a9c88b2}" />
+    </application>
+  </compatibility>
+</assembly>

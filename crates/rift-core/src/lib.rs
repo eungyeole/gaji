@@ -4,6 +4,9 @@ use std::process::Command;
 use serde::Serialize;
 use thiserror::Error;
 
+mod workflow;
+pub use workflow::*;
+
 #[derive(Debug, Error)]
 pub enum RiftError {
     #[error("could not start git: {0}")]
@@ -210,7 +213,7 @@ fn git_path(root: &Path, name: &str) -> Result<PathBuf, RiftError> {
     Ok(PathBuf::from(output.trim()))
 }
 
-fn git(directory: &Path, arguments: &[&str]) -> Result<String, RiftError> {
+pub(crate) fn git(directory: &Path, arguments: &[&str]) -> Result<String, RiftError> {
     let output = Command::new("git")
         .args(["-C", directory.to_string_lossy().as_ref()])
         .args(arguments)
