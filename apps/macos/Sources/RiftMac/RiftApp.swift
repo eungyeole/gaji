@@ -12,6 +12,10 @@ struct RiftApp: App {
         }
         .commands {
             CommandGroup(after: .newItem) {
+                Button("New Repository…") { repository.createRepository() }
+                    .keyboardShortcut("n")
+                Button("Clone Repository…") { repository.showsClone = true }
+                    .keyboardShortcut("n", modifiers: [.command, .shift])
                 Button("Open Repository…") { repository.chooseRepository() }
                     .keyboardShortcut("o")
                 Button("Refresh") { repository.refresh() }

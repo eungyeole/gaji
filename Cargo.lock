@@ -126,6 +126,7 @@ dependencies = [
  "rift-core",
  "serde",
  "serde_json",
+ "tempfile",
 ]
 
 [[package]]

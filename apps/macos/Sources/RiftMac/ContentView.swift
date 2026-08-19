@@ -56,14 +56,16 @@ struct ContentView: View {
                 .disabled(repository.root == nil)
                 Menu {
                     ForEach(repository.branches, id: \.self) { branch in
-                        Button {
-                            repository.switchBranch(branch)
-                        } label: {
-                            if branch == repository.branch {
-                                Label(branch, systemImage: "checkmark")
-                            } else {
-                                Text(branch)
-                            }
+                        Menu(branch) {
+                            Button("Switch") { repository.switchBranch(branch) }
+                                .disabled(branch == repository.branch)
+                            Divider()
+                            Button("Merge into \(repository.branch)") { repository.merge(branch) }
+                                .disabled(branch == repository.branch)
+                            Button("Rebase \(repository.branch) onto this") { repository.rebase(onto: branch) }
+                                .disabled(branch == repository.branch)
+                            Button("Interactive Rebase…") { repository.prepareInteractiveRebase(onto: branch) }
+                                .disabled(branch == repository.branch)
                         }
                     }
                     Divider()
@@ -105,6 +107,107 @@ struct ContentView: View {
             .padding(24)
             .frame(width: 420)
         }
+        .sheet(isPresented: $repository.showsClone) {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Clone Repository").font(.title2.bold())
+                TextField("Repository URL", text: $repository.cloneURL)
+                    .textFieldStyle(.roundedBorder)
+                HStack {
+                    TextField("Destination", text: $repository.cloneDestination)
+                        .textFieldStyle(.roundedBorder)
+                    Button("Choose…", action: repository.chooseCloneDestination)
+                }
+                HStack {
+                    Spacer()
+                    Button("Cancel") { repository.showsClone = false }
+                        .keyboardShortcut(.cancelAction)
+                    Button("Clone", action: repository.cloneRepository)
+                        .buttonStyle(.glassProminent)
+                        .keyboardShortcut(.defaultAction)
+                        .disabled(
+                            repository.cloneURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+                            repository.cloneDestination.isEmpty
+                        )
+                }
+            }
+            .padding(24)
+            .frame(width: 560)
+        }
+        .sheet(isPresented: $repository.showsInteractiveRebase) {
+            VStack(alignment: .leading, spacing: 14) {
+                Text("Interactive Rebase onto \(repository.rebaseUpstream)")
+                    .font(.title2.bold())
+                Text("Reorder commits and choose how each one should be replayed.")
+                    .foregroundStyle(.secondary)
+                List {
+                    ForEach(Array(repository.rebaseSteps.enumerated()), id: \.element.id) { index, step in
+                        HStack {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(step.subject).fontWeight(.medium)
+                                Text(String(step.commit.prefix(10)))
+                                    .font(.system(.caption, design: .monospaced))
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Picker("Action", selection: Binding(
+                                get: { repository.rebaseSteps[index].action },
+                                set: { repository.rebaseSteps[index].action = $0 }
+                            )) {
+                                Text("Pick").tag("pick")
+                                Text("Reword").tag("reword")
+                                Text("Edit").tag("edit")
+                                Text("Squash").tag("squash")
+                                Text("Fixup").tag("fixup")
+                                Text("Drop").tag("drop")
+                            }
+                            .labelsHidden()
+                            .frame(width: 120)
+                            Button { repository.moveRebaseStep(index, by: -1) } label: {
+                                Image(systemName: "arrow.up")
+                            }
+                            .disabled(index == 0)
+                            Button { repository.moveRebaseStep(index, by: 1) } label: {
+                                Image(systemName: "arrow.down")
+                            }
+                            .disabled(index == repository.rebaseSteps.count - 1)
+                        }
+                    }
+                }
+                HStack {
+                    Spacer()
+                    Button("Cancel") { repository.showsInteractiveRebase = false }
+                    Button("Start Rebase", action: repository.startInteractiveRebase)
+                        .buttonStyle(.glassProminent)
+                        .disabled(repository.rebaseSteps.isEmpty)
+                }
+            }
+            .padding(24)
+            .frame(minWidth: 720, minHeight: 560)
+        }
+        .sheet(isPresented: Binding(
+            get: { repository.conflictFile != nil },
+            set: { if !$0 { repository.conflictFile = nil } }
+        )) {
+            MergeEditorView()
+                .environment(repository)
+        }
+        .confirmationDialog(
+            "Hard reset to \(repository.pendingHardReset?.subject ?? "commit")?",
+            isPresented: Binding(
+                get: { repository.pendingHardReset != nil },
+                set: { if !$0 { repository.pendingHardReset = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            if let commit = repository.pendingHardReset {
+                Button("Discard Changes and Reset", role: .destructive) {
+                    repository.reset(to: commit, mode: "--hard")
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("All uncommitted tracked-file changes will be lost. This cannot be undone by Rift.")
+        }
         .alert("Couldn’t Open Repository", isPresented: Binding(
             get: { repository.errorMessage != nil },
             set: { if !$0 { repository.errorMessage = nil } }
@@ -125,7 +228,7 @@ private struct ConflictBar: View {
                 Image(systemName: repository.conflicts.isEmpty ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
                     .foregroundStyle(repository.conflicts.isEmpty ? .green : .orange)
                 Text(repository.operation?.rawValue ?? "Git operation").font(.headline)
-                Text(repository.conflicts.isEmpty ? "Ready to continue" : "Resolve (repository.conflicts.count) conflict(s)")
+                Text(repository.conflicts.isEmpty ? "Ready to continue" : "Resolve \(repository.conflicts.count) conflict(s)")
                     .foregroundStyle(.secondary)
                 Spacer()
                 Button("Abort", role: .destructive, action: repository.abortOperation)
@@ -138,6 +241,7 @@ private struct ConflictBar: View {
                     Image(systemName: "doc.badge.ellipsis")
                     Text(file).lineLimit(1)
                     Spacer()
+                    Button("Merge Editor") { repository.openConflictEditor(file) }
                     Button("Use Current") { repository.resolve(file, using: "--ours") }
                     Button("Use Incoming") { repository.resolve(file, using: "--theirs") }
                     Button("Mark Resolved") { repository.resolve(file, using: nil) }
@@ -147,6 +251,67 @@ private struct ConflictBar: View {
         }
         .padding(12)
         .background(.orange.opacity(0.06))
+    }
+}
+
+private struct MergeEditorView: View {
+    @Environment(RepositoryStore.self) private var repository
+
+    var body: some View {
+        @Bindable var repository = repository
+
+        VStack(spacing: 0) {
+            HStack {
+                Text("Resolve \(repository.conflictFile ?? "Conflict")").font(.title2.bold())
+                Spacer()
+                Button("Cancel") { repository.conflictFile = nil }
+                Button("Save and Mark Resolved", action: repository.saveConflictResult)
+                    .buttonStyle(.glassProminent)
+            }
+            .padding()
+            Divider()
+            HStack(spacing: 0) {
+                ConflictPane(title: "Base", content: repository.conflictBase)
+                Divider()
+                ConflictPane(title: "Current", content: repository.conflictOurs)
+                Divider()
+                ConflictPane(title: "Incoming", content: repository.conflictTheirs)
+            }
+            .frame(minHeight: 240)
+            Divider()
+            HStack {
+                Text("Result").font(.headline)
+                Spacer()
+                Button("Use Current") { repository.conflictResult = repository.conflictOurs }
+                Button("Use Incoming") { repository.conflictResult = repository.conflictTheirs }
+            }
+            .padding(.horizontal)
+            TextEditor(text: $repository.conflictResult)
+                .font(.system(.body, design: .monospaced))
+                .frame(minHeight: 260)
+                .padding([.horizontal, .bottom])
+        }
+        .frame(minWidth: 1000, minHeight: 680)
+    }
+}
+
+private struct ConflictPane: View {
+    let title: String
+    let content: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title).font(.headline).padding(.horizontal)
+            ScrollView([.horizontal, .vertical]) {
+                Text(content.isEmpty ? "Not present" : content)
+                    .font(.system(.callout, design: .monospaced))
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical)
     }
 }
 
@@ -164,9 +329,13 @@ private struct WelcomeView: View {
                     .symbolRenderingMode(.hierarchical)
                 Text("Rift").font(.system(size: 42, weight: .bold, design: .rounded))
                 Text("A native home for your Git repositories").foregroundStyle(.secondary)
-                Button("Open Repository…", action: repository.chooseRepository)
-                    .buttonStyle(.glassProminent)
-                    .controlSize(.large)
+                HStack {
+                    Button("Create…", action: repository.createRepository)
+                    Button("Clone…") { repository.showsClone = true }
+                    Button("Open Repository…", action: repository.chooseRepository)
+                        .buttonStyle(.glassProminent)
+                }
+                .controlSize(.large)
             }
             .padding(42)
             .glassEffect(.regular, in: .rect(cornerRadius: 28))
@@ -251,6 +420,34 @@ private struct FileDiffView: View {
             if repository.selectedFileDiff.isEmpty {
                 ContentUnavailableView("No Text Diff", systemImage: "doc",
                     description: Text("The file may be untracked, binary, or unchanged in this comparison."))
+            } else if !repository.selectedHunks.isEmpty {
+                ScrollView {
+                    LazyVStack(spacing: 12) {
+                        ForEach(repository.selectedHunks) { hunk in
+                            VStack(alignment: .leading, spacing: 0) {
+                                HStack {
+                                    Text(hunk.header)
+                                        .font(.system(.caption, design: .monospaced))
+                                        .foregroundStyle(.secondary)
+                                    Spacer()
+                                    Button(repository.selectedFileIsStaged ? "Unstage Hunk" : "Stage Hunk") {
+                                        repository.apply(hunk)
+                                    }
+                                    .buttonStyle(.glass)
+                                }
+                                .padding(8)
+                                Divider()
+                                Text(hunk.patch)
+                                    .font(.system(.body, design: .monospaced))
+                                    .textSelection(.enabled)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(10)
+                            }
+                            .background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 10))
+                        }
+                    }
+                    .padding()
+                }
             } else {
                 ScrollView([.horizontal, .vertical]) {
                     Text(repository.selectedFileDiff)
@@ -270,22 +467,42 @@ private struct CommitList: View {
 
     var body: some View {
         List(repository.commits, selection: $selection) { commit in
-            VStack(alignment: .leading, spacing: 5) {
-                Text(commit.subject).fontWeight(.medium).lineLimit(2)
-                HStack {
-                    Text(commit.author)
-                    Spacer()
-                    if let date = commit.date { Text(date, style: .relative) }
+            HStack(alignment: .top, spacing: 10) {
+                VStack(spacing: 0) {
+                    Rectangle().fill(.blue.opacity(0.45)).frame(width: 2, height: 8)
+                    Circle().fill(commit.parents.count > 1 ? .purple : .blue).frame(width: 11, height: 11)
+                    Rectangle().fill(.blue.opacity(0.45)).frame(width: 2, height: 30)
                 }
-                .font(.caption)
-                .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 5) {
+                    if !commit.references.isEmpty {
+                        Text(commit.references.joined(separator: " · "))
+                            .font(.caption2.bold())
+                            .foregroundStyle(.tint)
+                            .lineLimit(1)
+                    }
+                    Text(commit.subject).fontWeight(.medium).lineLimit(2)
+                    HStack {
+                        Text(commit.author)
+                        Spacer()
+                        if let date = commit.date { Text(date, style: .relative) }
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
             }
             .padding(.vertical, 3)
             .contextMenu {
-                Button("Cherry-Pick (String(commit.id.prefix(8)))") {
+                Button("Cherry-Pick \(String(commit.id.prefix(8)))") {
                     repository.cherryPick(commit)
                 }
                 .disabled(repository.operation != nil)
+                Button("Revert Commit") { repository.revert(commit) }
+                    .disabled(repository.operation != nil)
+                Menu("Reset Current Branch") {
+                    Button("Soft") { repository.reset(to: commit, mode: "--soft") }
+                    Button("Mixed") { repository.reset(to: commit, mode: "--mixed") }
+                    Button("Hard…", role: .destructive) { repository.pendingHardReset = commit }
+                }
                 Button("Copy Commit Hash") {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(commit.id, forType: .string)

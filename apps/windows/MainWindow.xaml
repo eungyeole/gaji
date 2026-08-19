@@ -16,12 +16,28 @@
         </Grid.RowDefinitions>
 
         <CommandBar Grid.Row="0" DefaultLabelPosition="Right">
+            <CommandBar.Content>
+                <ComboBox Width="190" Margin="8,0" Header="Branch"
+                          ItemsSource="{x:Bind ViewModel.Branches}" SelectedItem="{x:Bind ViewModel.Branch, Mode=OneWay}"
+                          SelectionChanged="Branch_SelectionChanged" />
+            </CommandBar.Content>
             <AppBarButton Icon="OpenFile" Label="Open" Click="OpenRepository_Click" />
+            <AppBarButton Icon="Add" Label="New" Click="NewRepository_Click" />
+            <AppBarButton Icon="Download" Label="Clone" Click="CloneRepository_Click" />
             <AppBarButton Icon="Refresh" Label="Refresh" Click="Refresh_Click" />
             <AppBarSeparator />
             <AppBarButton Icon="Sync" Label="Fetch" Click="Fetch_Click" />
             <AppBarButton Icon="Download" Label="Pull" Click="Pull_Click" />
             <AppBarButton Icon="Upload" Label="Push" Click="Push_Click" />
+            <AppBarSeparator />
+            <AppBarButton Icon="Accept" Label="Stage All" Click="StageAll_Click" />
+            <AppBarButton Icon="Undo" Label="Unstage All" Click="UnstageAll_Click" />
+            <AppBarSeparator />
+            <AppBarButton Icon="Play" Label="Continue" Click="Continue_Click" IsEnabled="{x:Bind ViewModel.HasOperation, Mode=OneWay}" />
+            <AppBarButton Icon="Cancel" Label="Abort" Click="Abort_Click" IsEnabled="{x:Bind ViewModel.HasOperation, Mode=OneWay}" />
+            <AppBarSeparator />
+            <AppBarButton Label="Use Current" Click="UseCurrent_Click" IsEnabled="{x:Bind ViewModel.HasSelectedConflict, Mode=OneWay}" />
+            <AppBarButton Label="Use Incoming" Click="UseIncoming_Click" IsEnabled="{x:Bind ViewModel.HasSelectedConflict, Mode=OneWay}" />
         </CommandBar>
 
         <NavigationView Grid.Row="1" PaneDisplayMode="Left" IsBackButtonVisible="Collapsed"
@@ -44,19 +60,44 @@
                         <ColumnDefinition Width="1" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <ListView Grid.Column="0" ItemsSource="{x:Bind ViewModel.Commits}" SelectionChanged="Commit_SelectionChanged">
-                        <ListView.ItemTemplate>
-                            <DataTemplate x:DataType="local:CommitItem">
-                                <StackPanel Padding="8" Spacing="4">
-                                    <TextBlock Text="{x:Bind Subject}" FontWeight="SemiBold" TextWrapping="Wrap" />
-                                    <StackPanel Orientation="Horizontal" Spacing="8">
-                                        <TextBlock Text="{x:Bind Author}" Opacity="0.65" />
-                                        <TextBlock Text="{x:Bind ShortId}" FontFamily="Consolas" Opacity="0.65" />
+                    <Grid Grid.Column="0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="180" />
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="*" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Margin="12,8" Text="Working Copy" FontWeight="SemiBold" />
+                        <ListView Grid.Row="1" ItemsSource="{x:Bind ViewModel.Changes}" SelectionChanged="Change_SelectionChanged">
+                            <ListView.ItemTemplate>
+                                <DataTemplate x:DataType="local:FileChangeItem">
+                                    <Grid Padding="8" ColumnSpacing="8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="28" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="{x:Bind Status}" FontFamily="Consolas" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
+                                        <TextBlock Grid.Column="1" Text="{x:Bind Path}" TextTrimming="CharacterEllipsis" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+                        <TextBlock Grid.Row="2" Margin="12,8" Text="History" FontWeight="SemiBold" />
+                        <ListView Grid.Row="3" ItemsSource="{x:Bind ViewModel.Commits}" SelectionChanged="Commit_SelectionChanged">
+                            <ListView.ItemTemplate>
+                                <DataTemplate x:DataType="local:CommitItem">
+                                    <StackPanel Padding="8" Spacing="4">
+                                        <TextBlock Text="{x:Bind RefLabel}" FontSize="11" Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}" />
+                                        <TextBlock Text="{x:Bind Subject}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <TextBlock Text="{x:Bind Author}" Opacity="0.65" />
+                                            <TextBlock Text="{x:Bind ShortId}" FontFamily="Consolas" Opacity="0.65" />
+                                        </StackPanel>
                                     </StackPanel>
-                                </StackPanel>
-                            </DataTemplate>
-                        </ListView.ItemTemplate>
-                    </ListView>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+                    </Grid>
                     <Rectangle Grid.Column="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" />
                     <Grid Grid.Column="2" Padding="20">
                         <Grid.RowDefinitions>

@@ -12,8 +12,17 @@
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <RiftRustTarget Condition="'$(Platform)' == 'ARM64'">aarch64-pc-windows-msvc</RiftRustTarget>
+    <RiftRustTarget Condition="'$(RiftRustTarget)' == ''">x86_64-pc-windows-msvc</RiftRustTarget>
+    <RiftNativeLibrary>$(MSBuildThisFileDirectory)..\..\target\$(RiftRustTarget)\release\rift_ffi.dll</RiftNativeLibrary>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.3.1" />
   </ItemGroup>
+  <Target Name="BuildRiftNativeCore" BeforeTargets="Build" Condition="'$(DesignTimeBuild)' != 'true'">
+    <Exec WorkingDirectory="$(MSBuildThisFileDirectory)..\.." Command="cargo build -p rift-ffi --release --target $(RiftRustTarget)" />
+  </Target>
+  <Target Name="CopyRiftNativeCore" AfterTargets="Build">
+    <Copy SourceFiles="$(RiftNativeLibrary)" DestinationFolder="$(OutDir)" />
+  </Target>
 </Project>

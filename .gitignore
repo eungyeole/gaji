@@ -4,3 +4,7 @@
 *.xcuserstate
 DerivedData/
 .DS_Store
+/dist
+apps/macos/.build/
+apps/windows/bin/
+apps/windows/obj/

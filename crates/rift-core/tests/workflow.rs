@@ -179,3 +179,25 @@ fn applies_hunks_and_clones_repositories() {
         "trunk"
     );
 }
+
+#[test]
+fn splits_and_stages_individual_hunks() {
+    let repository = Repository::new();
+    let original = (1..=20)
+        .map(|line| format!("line {line}\n"))
+        .collect::<String>();
+    repository.write("many.txt", &original);
+    rift_core::stage(repository.path(), &["many.txt"]).unwrap();
+    rift_core::commit(repository.path(), "many lines", false).unwrap();
+
+    let changed = original
+        .replace("line 2\n", "changed 2\n")
+        .replace("line 19\n", "changed 19\n");
+    repository.write("many.txt", &changed);
+    let hunks = rift_core::file_hunks(repository.path(), "many.txt", false).unwrap();
+    assert_eq!(hunks.len(), 2);
+    rift_core::apply_diff_patch(repository.path(), &hunks[0].patch, true, false).unwrap();
+    let staged = rift_core::file_diff(repository.path(), "many.txt", true).unwrap();
+    assert!(staged.contains("changed 2"));
+    assert!(!staged.contains("changed 19"));
+}

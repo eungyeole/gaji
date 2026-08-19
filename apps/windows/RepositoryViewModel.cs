@@ -13,23 +13,40 @@ public sealed class RepositoryViewModel : INotifyPropertyChanged
     private string detailTitle = "Welcome to Rift";
     private string detailText = "Open a local Git repository to begin.";
     private string commitMessage = "";
+    private string? operation;
+    private FileChangeItem? selectedChange;
 
     public ObservableCollection<CommitItem> Commits { get; } = [];
     public ObservableCollection<FileChangeItem> Changes { get; } = [];
+    public ObservableCollection<string> Branches { get; } = [];
     public string RepositoryName { get => repositoryName; private set => Set(ref repositoryName, value); }
     public string Branch { get => branch; private set => Set(ref branch, value); }
     public string DetailTitle { get => detailTitle; private set => Set(ref detailTitle, value); }
     public string DetailText { get => detailText; private set => Set(ref detailText, value); }
     public string CommitMessage { get => commitMessage; set => Set(ref commitMessage, value); }
     public Microsoft.UI.Xaml.Controls.InfoBadge ChangeBadge => new() { Value = Changes.Count };
+    public bool HasOperation => operation is not null;
+    public bool HasSelectedConflict => selectedChange?.IsConflict == true;
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
     public void Open(string path)
     {
-        root = Git(path, "rev-parse", "--show-toplevel").Trim();
+        root = NativeCore.Inspect(path).Root;
         RepositoryName = Path.GetFileName(root);
         Refresh();
+    }
+
+    public void Initialize(string path)
+    {
+        NativeCore.Execute(new { action = "initialize", path, defaultBranch = "main" });
+        Open(path);
+    }
+
+    public void Clone(string url, string destination)
+    {
+        NativeCore.Execute(new { action = "clone", url, destination, bare = false });
+        Open(destination);
     }
 
     public void Refresh()
@@ -37,18 +54,23 @@ public sealed class RepositoryViewModel : INotifyPropertyChanged
         if (root is null) return;
         try
         {
-            Branch = Git(root, "branch", "--show-current").Trim();
+            var snapshot = NativeCore.Inspect(root);
+            Branch = snapshot.Branch;
+            Branches.Clear();
+            foreach (var name in Git(root, "branch", "--format=%(refname:short)").Split('\n', StringSplitOptions.RemoveEmptyEntries))
+                Branches.Add(name);
+            operation = DetectOperation(root);
+            OnPropertyChanged(nameof(HasOperation));
             Changes.Clear();
-            foreach (var line in Git(root, "status", "--porcelain=v1").Split('\n', StringSplitOptions.RemoveEmptyEntries))
-                if (line.Length >= 4) Changes.Add(new(line[0], line[1], line[3..]));
+            foreach (var change in snapshot.Changes)
+                Changes.Add(new(
+                    change.IndexStatus.Length == 0 ? ' ' : change.IndexStatus[0],
+                    change.WorktreeStatus.Length == 0 ? ' ' : change.WorktreeStatus[0],
+                    change.Path));
 
             Commits.Clear();
-            var log = TryGit(root, "log", "-n", "200", "--pretty=format:%H%x1f%an%x1f%s%x1e");
-            foreach (var record in log.Split('\x1e', StringSplitOptions.RemoveEmptyEntries))
-            {
-                var fields = record.Trim().Split('\x1f', 3);
-                if (fields.Length == 3) Commits.Add(new(fields[0], fields[1], fields[2]));
-            }
+            foreach (var commit in NativeCore.Graph(root))
+                Commits.Add(new(commit.Id, commit.Author, commit.Subject, commit.Parents, commit.References));
             OnPropertyChanged(nameof(ChangeBadge));
         }
         catch (Exception error)
@@ -65,17 +87,109 @@ public sealed class RepositoryViewModel : INotifyPropertyChanged
         DetailText = TryGit(root, "show", "--stat", "--patch", "--no-ext-diff", commit.Id);
     }
 
+    public void Select(FileChangeItem change)
+    {
+        if (root is null) return;
+        selectedChange = change;
+        OnPropertyChanged(nameof(HasSelectedConflict));
+        DetailTitle = change.Path;
+        if (change.IsConflict)
+        {
+            var @base = TryGit(root, "show", $":1:{change.Path}");
+            var ours = TryGit(root, "show", $":2:{change.Path}");
+            var theirs = TryGit(root, "show", $":3:{change.Path}");
+            DetailText = $"BASE\n────\n{@base}\n\nCURRENT\n───────\n{ours}\n\nINCOMING\n────────\n{theirs}";
+        }
+        else
+        {
+            var staged = change.IndexStatus is not ' ' and not '?';
+            DetailText = staged
+                ? TryGit(root, "diff", "--cached", "--", change.Path)
+                : TryGit(root, "diff", "--no-ext-diff", "--", change.Path);
+        }
+    }
+
+    public void ResolveSelected(string side)
+    {
+        if (selectedChange is null || root is null) return;
+        RunNative(new {
+            action = "resolve", path = root, file = selectedChange.Path,
+            side = side == "--ours" ? "ours" : "theirs"
+        });
+        selectedChange = null;
+        OnPropertyChanged(nameof(HasSelectedConflict));
+    }
+
     public void Commit()
     {
         if (root is null || string.IsNullOrWhiteSpace(CommitMessage)) return;
-        Run("commit", "-m", CommitMessage.Trim());
+        RunNative(new { action = "commit", path = root, message = CommitMessage.Trim(), amend = false });
         CommitMessage = "";
     }
 
-    public void Run(params string[] arguments)
+    public void ContinueOperation()
+    {
+        if (operation is null || root is null) return;
+        RunNative(new { action = "continue", path = root });
+    }
+
+    public void AbortOperation()
+    {
+        if (operation is null || root is null) return;
+        RunNative(new { action = "abort", path = root });
+    }
+
+    public void StageAll()
+    {
+        if (root is null || Changes.Count == 0) return;
+        RunNative(new { action = "stage", path = root, files = Changes.Select(change => change.Path).ToArray() });
+    }
+
+    public void UnstageAll()
     {
         if (root is null) return;
-        try { Git(root, arguments); }
+        var files = Changes
+            .Where(change => change.IndexStatus is not ' ' and not '?')
+            .Select(change => change.Path)
+            .ToArray();
+        if (files.Length > 0) RunNative(new { action = "unstage", path = root, files });
+    }
+
+    public void SwitchBranch(string branchName)
+    {
+        if (root is not null)
+            RunNative(new { action = "switchBranch", path = root, branch = branchName });
+    }
+
+    public void Fetch()
+    {
+        if (root is null) return;
+        var remote = FirstRemote();
+        if (remote is not null) RunNative(new { action = "fetch", path = root, remote, prune = true });
+    }
+
+    public void Pull()
+    {
+        if (root is not null) RunNative(new { action = "pull", path = root, rebase = true });
+    }
+
+    public void Push()
+    {
+        if (root is null) return;
+        var remote = FirstRemote();
+        if (remote is not null) RunNative(new {
+            action = "push", path = root, remote, branch = Branch,
+            setUpstream = false, forceWithLease = false
+        });
+    }
+
+    private string? FirstRemote() => root is null
+        ? null
+        : Git(root, "remote").Split('\n', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+
+    private void RunNative(object request)
+    {
+        try { NativeCore.Execute(request); }
         catch (Exception error) { DetailTitle = "Git error"; DetailText = error.Message; }
         Refresh();
     }
@@ -83,6 +197,16 @@ public sealed class RepositoryViewModel : INotifyPropertyChanged
     private static string TryGit(string path, params string[] arguments)
     {
         try { return Git(path, arguments); } catch { return ""; }
+    }
+
+    private static string? DetectOperation(string path)
+    {
+        string GitPath(string name) => Git(path, "rev-parse", "--path-format=absolute", "--git-path", name).Trim();
+        if (Directory.Exists(GitPath("rebase-merge")) || Directory.Exists(GitPath("rebase-apply"))) return "rebase";
+        if (File.Exists(GitPath("CHERRY_PICK_HEAD"))) return "cherry-pick";
+        if (File.Exists(GitPath("MERGE_HEAD"))) return "merge";
+        if (File.Exists(GitPath("REVERT_HEAD"))) return "revert";
+        return null;
     }
 
     private static string Git(string path, params string[] arguments)
@@ -117,9 +241,14 @@ public sealed class RepositoryViewModel : INotifyPropertyChanged
         PropertyChanged?.Invoke(this, new(property));
 }
 
-public sealed record CommitItem(string Id, string Author, string Subject)
+public sealed record CommitItem(string Id, string Author, string Subject, string[] Parents, string[] References)
 {
     public string ShortId => Id[..Math.Min(8, Id.Length)];
+    public string RefLabel => string.Join(" · ", References);
 }
 
-public sealed record FileChangeItem(char IndexStatus, char WorktreeStatus, string Path);
+public sealed record FileChangeItem(char IndexStatus, char WorktreeStatus, string Path)
+{
+    public string Status => IndexStatus == '?' ? "U" : (IndexStatus == ' ' ? WorktreeStatus : IndexStatus).ToString();
+    public bool IsConflict => IndexStatus == 'U' || WorktreeStatus == 'U' || (IndexStatus == 'A' && WorktreeStatus == 'A') || (IndexStatus == 'D' && WorktreeStatus == 'D');
+}

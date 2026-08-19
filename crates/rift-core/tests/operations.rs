@@ -74,6 +74,11 @@ fn resolves_and_continues_a_conflicting_cherry_pick() {
     let state = rift_core::operation_state(repository.path()).expect("read operation state");
     assert_eq!(state.operation, Some(OperationKind::CherryPick));
     assert_eq!(state.conflicts, ["conflict.txt"]);
+    let content = rift_core::conflict_content(repository.path(), "conflict.txt").unwrap();
+    assert_eq!(content.base.as_deref(), Some("base\n"));
+    assert_eq!(content.ours.as_deref(), Some("main\n"));
+    assert_eq!(content.theirs.as_deref(), Some("feature\n"));
+    assert!(content.working.as_deref().unwrap().contains("<<<<<<<"));
 
     rift_core::choose_conflict_side(repository.path(), "conflict.txt", ConflictSide::Theirs)
         .expect("choose incoming change");
@@ -106,5 +111,29 @@ fn aborts_a_conflicting_rebase() {
             .unwrap()
             .operation,
         None
+    );
+}
+
+#[test]
+fn executes_a_validated_interactive_rebase_plan() {
+    let repository = TestRepository::new();
+    repository.write("base\n");
+    let base = repository.commit("base");
+
+    fs::write(repository.path().join("first.txt"), "first\n").unwrap();
+    repository.git(&["add", "first.txt"]);
+    repository.git(&["commit", "-q", "-m", "first"]);
+    fs::write(repository.path().join("second.txt"), "second\n").unwrap();
+    repository.git(&["add", "second.txt"]);
+    repository.git(&["commit", "-q", "-m", "second"]);
+
+    let mut plan = rift_core::interactive_rebase_plan(repository.path(), &base).unwrap();
+    assert_eq!(plan.len(), 2);
+    plan.swap(0, 1);
+    rift_core::start_interactive_rebase(repository.path(), &base, &plan).unwrap();
+
+    assert_eq!(
+        repository.git(&["log", "--reverse", "--format=%s"]),
+        "base\nsecond\nfirst"
     );
 }

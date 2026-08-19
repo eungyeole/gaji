@@ -6,6 +6,8 @@ use thiserror::Error;
 
 mod workflow;
 pub use workflow::*;
+mod rebase;
+pub use rebase::*;
 
 #[derive(Debug, Error)]
 pub enum RiftError {
@@ -57,6 +59,16 @@ pub enum OperationKind {
 pub struct OperationState {
     pub operation: Option<OperationKind>,
     pub conflicts: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConflictContent {
+    pub path: String,
+    pub base: Option<String>,
+    pub ours: Option<String>,
+    pub theirs: Option<String>,
+    pub working: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -126,6 +138,35 @@ pub fn operation_state(path: impl AsRef<Path>) -> Result<OperationState, RiftErr
         operation,
         conflicts,
     })
+}
+
+pub fn conflict_content(path: impl AsRef<Path>, file: &str) -> Result<ConflictContent, RiftError> {
+    let root = repository_root(path.as_ref())?;
+    let conflicts = operation_state(&root)?.conflicts;
+    if !conflicts.iter().any(|candidate| candidate == file) {
+        return Err(RiftError::GitFailed(format!(
+            "{file} is not an unresolved conflict"
+        )));
+    }
+    Ok(ConflictContent {
+        path: file.to_owned(),
+        base: conflict_stage(&root, 1, file)?,
+        ours: conflict_stage(&root, 2, file)?,
+        theirs: conflict_stage(&root, 3, file)?,
+        working: match std::fs::read(root.join(file)) {
+            Ok(bytes) => String::from_utf8(bytes).ok(),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+            Err(error) => return Err(RiftError::GitUnavailable(error)),
+        },
+    })
+}
+
+fn conflict_stage(root: &Path, stage: u8, file: &str) -> Result<Option<String>, RiftError> {
+    match git(root, &["show", &format!(":{stage}:{file}")]) {
+        Ok(contents) => Ok(Some(contents)),
+        Err(RiftError::GitFailed(_)) => Ok(None),
+        Err(error) => Err(error),
+    }
 }
 
 pub fn cherry_pick(path: impl AsRef<Path>, revision: &str) -> Result<(), RiftError> {

@@ -16,6 +16,14 @@ pub struct DiffSummary {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct DiffHunk {
+    pub id: usize,
+    pub header: String,
+    pub patch: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BranchSummary {
     pub name: String,
     pub commit: String,
@@ -123,6 +131,15 @@ pub fn file_diff(path: impl AsRef<Path>, file: &str, staged: bool) -> Result<Str
     } else {
         git(&root, &["diff", "--no-ext-diff", "--", file])
     }
+}
+
+pub fn file_hunks(
+    path: impl AsRef<Path>,
+    file: &str,
+    staged: bool,
+) -> Result<Vec<DiffHunk>, RiftError> {
+    let patch = file_diff(path, file, staged)?;
+    Ok(parse_hunks(&patch))
 }
 
 pub fn apply_diff_patch(
@@ -680,6 +697,42 @@ fn paths_command(path: &Path, prefix: &[&str], files: &[&str]) -> Result<(), Rif
 
 fn parse_count(value: &str) -> Option<u32> {
     value.parse().ok()
+}
+
+fn parse_hunks(patch: &str) -> Vec<DiffHunk> {
+    let mut file_header = String::new();
+    let mut current_header = String::new();
+    let mut current_body = String::new();
+    let mut hunks = Vec::new();
+
+    for line in patch.split_inclusive('\n') {
+        if line.starts_with("@@ ") {
+            if !current_header.is_empty() {
+                let id = hunks.len();
+                hunks.push(DiffHunk {
+                    id,
+                    header: current_header.trim_end().to_owned(),
+                    patch: format!("{file_header}{current_body}"),
+                });
+                current_body.clear();
+            }
+            current_header = line.trim_end().to_owned();
+            current_body.push_str(line);
+        } else if current_header.is_empty() {
+            file_header.push_str(line);
+        } else {
+            current_body.push_str(line);
+        }
+    }
+    if !current_header.is_empty() {
+        let id = hunks.len();
+        hunks.push(DiffHunk {
+            id,
+            header: current_header.trim_end().to_owned(),
+            patch: format!("{file_header}{current_body}"),
+        });
+    }
+    hunks
 }
 
 fn parse_history(output: &str) -> Vec<HistoryEntry> {

@@ -24,14 +24,63 @@ public sealed partial class MainWindow : Window
         if (folder is not null) ViewModel.Open(folder.Path);
     }
 
+    private async void NewRepository_Click(object sender, RoutedEventArgs e)
+    {
+        var folder = await PickFolder("Choose a folder for the new repository");
+        if (folder is not null) ViewModel.Initialize(folder.Path);
+    }
+
+    private async void CloneRepository_Click(object sender, RoutedEventArgs e)
+    {
+        var urlBox = new TextBox { PlaceholderText = "https://github.com/owner/repository.git" };
+        var dialog = new ContentDialog {
+            XamlRoot = Content.XamlRoot,
+            Title = "Clone Repository",
+            Content = urlBox,
+            PrimaryButtonText = "Next",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Primary
+        };
+        if (await dialog.ShowAsync() != ContentDialogResult.Primary || string.IsNullOrWhiteSpace(urlBox.Text)) return;
+        var parent = await PickFolder("Choose the destination folder");
+        if (parent is null) return;
+        var name = urlBox.Text.Trim().TrimEnd('/').Split('/').Last().Replace(".git", "");
+        ViewModel.Clone(urlBox.Text.Trim(), Path.Combine(parent.Path, name));
+    }
+
+    private async Task<Windows.Storage.StorageFolder?> PickFolder(string title)
+    {
+        var picker = new FolderPicker { SuggestedStartLocation = PickerLocationId.ComputerFolder };
+        picker.FileTypeFilter.Add("*");
+        InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(this));
+        return await picker.PickSingleFolderAsync();
+    }
+
     private void Refresh_Click(object sender, RoutedEventArgs e) => ViewModel.Refresh();
-    private void Fetch_Click(object sender, RoutedEventArgs e) => ViewModel.Run("fetch", "--prune");
-    private void Pull_Click(object sender, RoutedEventArgs e) => ViewModel.Run("pull", "--rebase");
-    private void Push_Click(object sender, RoutedEventArgs e) => ViewModel.Run("push");
+    private void Fetch_Click(object sender, RoutedEventArgs e) => ViewModel.Fetch();
+    private void Pull_Click(object sender, RoutedEventArgs e) => ViewModel.Pull();
+    private void Push_Click(object sender, RoutedEventArgs e) => ViewModel.Push();
+    private void StageAll_Click(object sender, RoutedEventArgs e) => ViewModel.StageAll();
+    private void UnstageAll_Click(object sender, RoutedEventArgs e) => ViewModel.UnstageAll();
+    private void Continue_Click(object sender, RoutedEventArgs e) => ViewModel.ContinueOperation();
+    private void Abort_Click(object sender, RoutedEventArgs e) => ViewModel.AbortOperation();
+    private void UseCurrent_Click(object sender, RoutedEventArgs e) => ViewModel.ResolveSelected("--ours");
+    private void UseIncoming_Click(object sender, RoutedEventArgs e) => ViewModel.ResolveSelected("--theirs");
     private void Commit_Click(object sender, RoutedEventArgs e) => ViewModel.Commit();
 
     private void Commit_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if ((sender as ListView)?.SelectedItem is CommitItem commit) ViewModel.Select(commit);
+    }
+
+    private void Change_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if ((sender as ListView)?.SelectedItem is FileChangeItem change) ViewModel.Select(change);
+    }
+
+    private void Branch_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if ((sender as ComboBox)?.SelectedItem is string branch && branch != ViewModel.Branch)
+            ViewModel.SwitchBranch(branch);
     }
 }

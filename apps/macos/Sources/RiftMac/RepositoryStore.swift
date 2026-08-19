@@ -19,6 +19,17 @@ struct Commit: Identifiable, Hashable {
     let author: String
     let date: Date?
     let subject: String
+    let parents: [String]
+    let references: [String]
+
+    init(id: String, author: String, date: Date?, subject: String, parents: [String] = [], references: [String] = []) {
+        self.id = id
+        self.author = author
+        self.date = date
+        self.subject = subject
+        self.parents = parents
+        self.references = references
+    }
 }
 
 enum GitOperation: String {
@@ -44,11 +55,32 @@ final class RepositoryStore {
     var selection: Commit.ID?
     var selectedFile: String?
     var selectedFileDiff = ""
+    var selectedHunks: [CoreDiffHunk] = []
+    var selectedFileIsStaged = false
     var commitMessage = ""
     var newBranchName = ""
     var showsCreateBranch = false
+    var pendingHardReset: Commit?
+    var conflictFile: String?
+    var conflictBase = ""
+    var conflictOurs = ""
+    var conflictTheirs = ""
+    var conflictResult = ""
+    var cloneURL = ""
+    var cloneDestination = ""
+    var showsClone = false
+    var rebaseUpstream = ""
+    var rebaseSteps: [CoreRebaseStep] = []
+    var showsInteractiveRebase = false
 
     var title: String { root?.lastPathComponent ?? "Rift" }
+
+    init() {
+        if let path = UserDefaults.standard.string(forKey: "lastRepository"),
+           FileManager.default.fileExists(atPath: path) {
+            open(URL(fileURLWithPath: path))
+        }
+    }
 
     func chooseRepository() {
         let panel = NSOpenPanel()
@@ -63,10 +95,53 @@ final class RepositoryStore {
 
     func open(_ url: URL) {
         do {
-            let rootPath = try git(at: url, "rev-parse", "--show-toplevel")
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            root = URL(fileURLWithPath: rootPath)
+            let snapshot = try CoreBridge.inspect(url.path())
+            root = URL(fileURLWithPath: snapshot.root)
+            UserDefaults.standard.set(snapshot.root, forKey: "lastRepository")
             refresh()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func chooseCloneDestination() {
+        let panel = NSSavePanel()
+        panel.title = "Clone Repository"
+        panel.prompt = "Choose"
+        panel.canCreateDirectories = true
+        let suggested = cloneURL.split(separator: "/").last.map(String.init)?
+            .replacingOccurrences(of: ".git", with: "") ?? "repository"
+        panel.nameFieldStringValue = suggested
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        cloneDestination = url.path()
+    }
+
+    func cloneRepository() {
+        let url = cloneURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !url.isEmpty, !cloneDestination.isEmpty else { return }
+        do {
+            try CoreBridge.execute([
+                "action": "clone", "url": url, "destination": cloneDestination, "bare": false
+            ])
+            showsClone = false
+            open(URL(fileURLWithPath: cloneDestination))
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func createRepository() {
+        let panel = NSSavePanel()
+        panel.title = "Create Repository"
+        panel.prompt = "Create"
+        panel.canCreateDirectories = true
+        panel.nameFieldStringValue = "new-repository"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            try CoreBridge.execute([
+                "action": "initialize", "path": url.path(), "defaultBranch": "main"
+            ])
+            open(url)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -75,18 +150,36 @@ final class RepositoryStore {
     func refresh() {
         guard let root else { return }
         do {
-            branch = try git(at: root, "branch", "--show-current")
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            changes = parseStatus(try git(at: root, "status", "--porcelain=v1"))
-            commits = parseLog(gitAllowingEmptyHistory(at: root))
+            let snapshot = try CoreBridge.inspect(root.path())
+            branch = snapshot.branch
+            changes = snapshot.changes.map {
+                FileChange(
+                    indexStatus: $0.indexStatus.first ?? " ",
+                    worktreeStatus: $0.worktreeStatus.first ?? " ",
+                    path: $0.path
+                )
+            }
+            let formatter = ISO8601DateFormatter()
+            commits = try CoreBridge.graph(root.path()).map {
+                Commit(
+                    id: $0.id, author: $0.author, date: formatter.date(from: $0.authoredAt),
+                    subject: $0.subject, parents: $0.parents, references: $0.references
+                )
+            }
             branches = try git(at: root, "branch", "--format=%(refname:short)")
                 .split(separator: "\n").map(String.init)
             remotes = try git(at: root, "remote").split(separator: "\n").map(String.init)
             stashes = try git(at: root, "stash", "list", "--format=%gd %s")
                 .split(separator: "\n").map(String.init)
-            operation = detectOperation(at: root)
-            conflicts = try git(at: root, "diff", "--name-only", "--diff-filter=U")
-                .split(separator: "\n").map(String.init)
+            let state = try CoreBridge.operationState(root.path())
+            operation = switch state.operation {
+            case "cherryPick": .cherryPick
+            case "rebase": .rebase
+            case "merge": .merge
+            case "revert": .revert
+            default: nil
+            }
+            conflicts = state.conflicts
             if !commits.contains(where: { $0.id == selection }) {
                 selection = commits.first?.id
             }
@@ -97,96 +190,175 @@ final class RepositoryStore {
     }
 
     func cherryPick(_ commit: Commit) {
-        runOperation("cherry-pick", commit.id)
+        runCore(["action": "cherryPick", "path": rootPath, "revision": commit.id])
     }
 
     func select(_ change: FileChange) {
         guard let root else { return }
         selectedFile = change.path
         let staged = change.indexStatus != " " && change.indexStatus != "?"
+        selectedFileIsStaged = staged
         selectedFileDiff = (try? git(
             at: root, "diff", staged ? "--cached" : "--no-ext-diff", "--", change.path
         )) ?? ""
+        selectedHunks = (try? CoreBridge.hunks(root.path(), file: change.path, staged: staged)) ?? []
+    }
+
+    func apply(_ hunk: CoreDiffHunk) {
+        runCore([
+            "action": "applyPatch", "path": rootPath, "patch": hunk.patch,
+            "staged": true, "reverse": selectedFileIsStaged
+        ])
+        if let file = selectedFile, let change = changes.first(where: { $0.path == file }) {
+            select(change)
+        }
     }
 
     func stage(_ file: String) {
-        runOperation("add", "--", file)
+        runCore(["action": "stage", "path": rootPath, "files": [file]])
     }
 
     func unstage(_ file: String) {
-        runOperation("restore", "--staged", "--", file)
+        runCore(["action": "unstage", "path": rootPath, "files": [file]])
     }
 
     func discard(_ file: String) {
-        runOperation("restore", "--worktree", "--", file)
+        runCore(["action": "discard", "path": rootPath, "files": [file]])
     }
 
     func createCommit(amend: Bool = false) {
         let message = commitMessage.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !message.isEmpty else { return }
-        if amend {
-            runOperation("commit", "--amend", "-m", message)
-        } else {
-            runOperation("commit", "-m", message)
-        }
+        runCore(["action": "commit", "path": rootPath, "message": message, "amend": amend])
         if errorMessage == nil { commitMessage = "" }
     }
 
-    func switchBranch(_ name: String) { runOperation("switch", name) }
+    func switchBranch(_ name: String) {
+        runCore(["action": "switchBranch", "path": rootPath, "branch": name])
+    }
+    func merge(_ name: String) {
+        runCore(["action": "merge", "path": rootPath, "revision": name, "noFastForward": false])
+    }
+    func rebase(onto name: String) {
+        runCore(["action": "rebase", "path": rootPath, "upstream": name])
+    }
+
+    func prepareInteractiveRebase(onto name: String) {
+        do {
+            rebaseUpstream = name
+            rebaseSteps = try CoreBridge.rebasePlan(rootPath, upstream: name)
+            showsInteractiveRebase = true
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func moveRebaseStep(_ index: Int, by offset: Int) {
+        let destination = index + offset
+        guard rebaseSteps.indices.contains(index), rebaseSteps.indices.contains(destination) else { return }
+        rebaseSteps.swapAt(index, destination)
+    }
+
+    func startInteractiveRebase() {
+        let steps = rebaseSteps.map {
+            ["action": $0.action, "commit": $0.commit, "subject": $0.subject]
+        }
+        showsInteractiveRebase = false
+        runCore([
+            "action": "interactiveRebase", "path": rootPath,
+            "upstream": rebaseUpstream, "steps": steps
+        ])
+    }
 
     func createBranch() {
         let name = newBranchName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { return }
-        runOperation("switch", "-c", name)
+        runCore(["action": "createBranch", "path": rootPath, "name": name, "start": "HEAD", "switch": true])
         if errorMessage == nil {
             newBranchName = ""
             showsCreateBranch = false
         }
     }
 
-    func fetch() { runOperation("fetch", "--all", "--prune") }
-    func pull() { runOperation("pull", "--rebase") }
-    func push() { runOperation("push") }
-    func stash() { runOperation("stash", "push", "-u", "-m", "Rift stash") }
-    func popStash() { runOperation("stash", "pop") }
+    func fetch() {
+        guard let remote = remotes.first else { return }
+        runCore(["action": "fetch", "path": rootPath, "remote": remote, "prune": true])
+    }
+    func pull() { runCore(["action": "pull", "path": rootPath, "rebase": true]) }
+    func push() {
+        guard let remote = remotes.first else { return }
+        runCore([
+            "action": "push", "path": rootPath, "remote": remote, "branch": branch,
+            "setUpstream": false, "forceWithLease": false
+        ])
+    }
+    func stash() {
+        runCore([
+            "action": "stashPush", "path": rootPath, "message": "Rift stash", "includeUntracked": true
+        ])
+    }
+    func popStash() {
+        runCore(["action": "stashApply", "path": rootPath, "index": 0, "pop": true])
+    }
+    func revert(_ commit: Commit) {
+        runCore(["action": "revert", "path": rootPath, "target": commit.id])
+    }
+
+    func reset(to commit: Commit, mode: String) {
+        let modeName = switch mode {
+        case "--soft": "soft"
+        case "--hard": "hard"
+        default: "mixed"
+        }
+        runCore(["action": "reset", "path": rootPath, "target": commit.id, "mode": modeName])
+        pendingHardReset = nil
+    }
 
     func continueOperation() {
         guard let operation else { return }
-        switch operation {
-        case .cherryPick: runOperation("cherry-pick", "--continue")
-        case .rebase: runOperation("rebase", "--continue")
-        case .merge: runOperation("commit", "--no-edit")
-        case .revert: runOperation("revert", "--continue")
-        }
+        _ = operation
+        runCore(["action": "continue", "path": rootPath])
     }
 
     func abortOperation() {
         guard let operation else { return }
-        switch operation {
-        case .cherryPick: runOperation("cherry-pick", "--abort")
-        case .rebase: runOperation("rebase", "--abort")
-        case .merge: runOperation("merge", "--abort")
-        case .revert: runOperation("revert", "--abort")
-        }
+        _ = operation
+        runCore(["action": "abort", "path": rootPath])
     }
 
     func resolve(_ file: String, using side: String?) {
+        let sideName = side == "--ours" ? "ours" : side == "--theirs" ? "theirs" : nil
+        var request: [String: Any] = ["action": "resolve", "path": rootPath, "file": file]
+        if let sideName { request["side"] = sideName }
+        runCore(request)
+    }
+
+    func openConflictEditor(_ file: String) {
         guard let root else { return }
+        conflictFile = file
+        conflictBase = (try? git(at: root, "show", ":1:\(file)")) ?? ""
+        conflictOurs = (try? git(at: root, "show", ":2:\(file)")) ?? ""
+        conflictTheirs = (try? git(at: root, "show", ":3:\(file)")) ?? ""
+        conflictResult = (try? String(contentsOf: root.appending(path: file), encoding: .utf8)) ?? ""
+    }
+
+    func saveConflictResult() {
+        guard let root, let conflictFile else { return }
         do {
-            if let side { _ = try git(at: root, "checkout", side, "--", file) }
-            _ = try git(at: root, "add", "--", file)
-            refresh()
+            try conflictResult.write(to: root.appending(path: conflictFile), atomically: true, encoding: .utf8)
+            self.conflictFile = nil
+            runCore(["action": "resolve", "path": root.path(), "file": conflictFile])
         } catch {
-            refresh()
             errorMessage = error.localizedDescription
         }
     }
 
-    private func runOperation(_ arguments: String...) {
-        guard let root else { return }
+    private var rootPath: String { root?.path() ?? "" }
+
+    private func runCore(_ request: [String: Any]) {
         var operationError: String?
         do {
-            _ = try git(at: root, arguments)
+            try CoreBridge.execute(request)
         } catch {
             operationError = error.localizedDescription
         }
@@ -222,45 +394,6 @@ final class RepositoryStore {
         return String(decoding: stdout.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
     }
 
-    private func detectOperation(at root: URL) -> GitOperation? {
-        func gitPath(_ name: String) -> URL? {
-            guard let path = try? git(at: root, "rev-parse", "--path-format=absolute", "--git-path", name)
-                .trimmingCharacters(in: .whitespacesAndNewlines) else { return nil }
-            return URL(fileURLWithPath: path)
-        }
-        let files = FileManager.default
-        let exists: (URL) -> Bool = { files.fileExists(atPath: $0.path()) }
-        if ["rebase-merge", "rebase-apply"].compactMap(gitPath).contains(where: exists) { return .rebase }
-        if gitPath("CHERRY_PICK_HEAD").map(exists) == true { return .cherryPick }
-        if gitPath("MERGE_HEAD").map(exists) == true { return .merge }
-        if gitPath("REVERT_HEAD").map(exists) == true { return .revert }
-        return nil
-    }
-
-    private func gitAllowingEmptyHistory(at root: URL) -> String {
-        (try? git(
-            at: root,
-            "log", "-n", "100", "--date=iso-strict",
-            "--pretty=format:%H%x1f%an%x1f%aI%x1f%s%x1e"
-        )) ?? ""
-    }
-
-    private func parseStatus(_ output: String) -> [FileChange] {
-        output.split(separator: "\n").compactMap { line in
-            guard line.count >= 4 else { return nil }
-            let chars = Array(line)
-            return FileChange(indexStatus: chars[0], worktreeStatus: chars[1], path: String(chars.dropFirst(3)))
-        }
-    }
-
-    private func parseLog(_ output: String) -> [Commit] {
-        let formatter = ISO8601DateFormatter()
-        return output.split(separator: "\u{1e}").compactMap { record in
-            let fields = record.split(separator: "\u{1f}", maxSplits: 3).map(String.init)
-            guard fields.count == 4 else { return nil }
-            return Commit(id: fields[0], author: fields[1], date: formatter.date(from: fields[2]), subject: fields[3])
-        }
-    }
 }
 
 enum GitError: LocalizedError {
