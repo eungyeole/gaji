@@ -223,24 +223,14 @@ struct ContentView: View {
                     Label("Push", systemImage: "arrow.up.to.line")
                 }
                 .disabled(repository.root == nil || repository.isBusy)
-                Menu {
-                    Button("Stash Changes", action: repository.stash)
-                    Button("Pop Latest", action: repository.popStash)
-                        .disabled(repository.stashes.isEmpty)
-                    if !repository.stashes.isEmpty {
-                        Divider()
-                        ForEach(repository.stashes) { stash in
-                            Menu(stash.subject) {
-                                Button("Apply") { repository.applyStash(stash.index, pop: false) }
-                                Button("Pop") { repository.applyStash(stash.index, pop: true) }
-                                Button("Drop", role: .destructive) { repository.dropStash(stash.index) }
-                            }
-                        }
-                    }
-                } label: {
+                Button(action: repository.stash) {
                     Label("Stash", systemImage: "shippingbox")
                 }
                 .disabled(repository.root == nil || repository.isBusy)
+                Button(action: repository.popStash) {
+                    Label("Pop", systemImage: "shippingbox.and.arrow.up")
+                }
+                .disabled(repository.root == nil || repository.stashes.isEmpty || repository.isBusy)
             }
         }
         .sheet(isPresented: $repository.showsCreateBranch) {
@@ -751,6 +741,33 @@ private struct SidebarView: View {
                     sectionHeader("Remote") { repository.showsAddRemote = true }
                 }
 
+                if !repository.stashes.isEmpty {
+                    Section("Stashes") {
+                        ForEach(repository.stashes) { stash in
+                            HStack(spacing: 7) {
+                                Image(systemName: "shippingbox")
+                                    .foregroundStyle(.secondary)
+                                    .frame(width: 14)
+                                Text(stash.subject)
+                                    .lineLimit(1)
+                                Spacer(minLength: 6)
+                                Text("#\(stash.index)")
+                                    .font(.caption2.monospacedDigit())
+                                    .foregroundStyle(.tertiary)
+                            }
+                            .frame(height: 22)
+                            .tag("stash:\(stash.index)")
+                            .help(stash.reference)
+                            .contextMenu {
+                                Button("Apply") { repository.applyStash(stash.index, pop: false) }
+                                Button("Pop") { repository.applyStash(stash.index, pop: true) }
+                                Divider()
+                                Button("Drop", role: .destructive) { repository.dropStash(stash.index) }
+                            }
+                        }
+                    }
+                }
+
                 Section {
                 ForEach(repository.worktrees) { worktree in
                     let name = worktree.branch ?? URL(fileURLWithPath: worktree.path).lastPathComponent
@@ -1125,7 +1142,9 @@ private struct CommitFileRow: View {
                 .opacity(isHovering ? 1 : 0)
         }
         .contentShape(Rectangle())
-        .onTapGesture { repository.selectCommitFile(change) }
+        .onTapGesture {
+            isSelected ? repository.closeFileDetails() : repository.selectCommitFile(change)
+        }
         .onHover { isHovering = $0 }
         .help(change.path)
         .padding(.horizontal, 8)
@@ -1229,7 +1248,9 @@ private struct ChangeFileRow: View {
             .help(staged ? "Unstage file" : "Stage file")
         }
         .contentShape(Rectangle())
-        .onTapGesture { repository.select(change, staged: staged) }
+        .onTapGesture {
+            isSelected ? repository.closeFileDetails() : repository.select(change, staged: staged)
+        }
         .onHover { isHovering = $0 }
         .help(change.path)
         .padding(.horizontal, 8)
