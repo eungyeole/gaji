@@ -590,34 +590,19 @@ private struct SidebarView: View {
         VStack(spacing: 0) {
             List(selection: $selectedItem) {
                 Section {
-                ForEach(repository.branches, id: \.self) { branch in
-                    BranchRow(name: branch, isCurrent: branch == repository.branch)
-                        .tag("local:\(branch)")
-                        .contentShape(Rectangle())
-                        .onTapGesture(count: 2) { repository.switchBranch(branch) }
-                        .contextMenu { localBranchMenu(branch) }
-                }
+                    BranchRow(name: repository.branch, isCurrent: true)
+                        .tag("local:\(repository.branch)")
+                        .contextMenu { LocalBranchMenu(branch: repository.branch) }
+                    BranchTreeRows(
+                        nodes: branchTree(repository.branches.filter { $0 != repository.branch }),
+                        scope: .local
+                    )
                 } header: {
                     sectionHeader("Local") { repository.showsCreateBranch = true }
                 }
 
                 Section {
-                ForEach(repository.remoteBranches, id: \.self) { branch in
-                    BranchRow(name: branch, isCurrent: false)
-                        .tag("remote:\(branch)")
-                        .contentShape(Rectangle())
-                        .onTapGesture(count: 2) { repository.switchRemoteBranch(branch) }
-                        .contextMenu {
-                            Button("Check Out") { repository.switchRemoteBranch(branch) }
-                            Button("Merge into \(repository.branch)") { repository.merge(branch) }
-                            Button("Rebase \(repository.branch) onto this") { repository.rebase(onto: branch) }
-                            Button("Interactive Rebase…") { repository.prepareInteractiveRebase(onto: branch) }
-                            Divider()
-                            if let remote = branch.split(separator: "/").first.map(String.init) {
-                                Button("Fetch \(remote)") { repository.fetch(remote) }
-                            }
-                        }
-                }
+                    BranchTreeRows(nodes: branchTree(repository.remoteBranches), scope: .remote)
                 } header: {
                     sectionHeader("Remote") { repository.showsAddRemote = true }
                 }
@@ -673,28 +658,6 @@ private struct SidebarView: View {
         }
     }
 
-    @ViewBuilder
-    private func localBranchMenu(_ branch: String) -> some View {
-        Button("Switch") { repository.switchBranch(branch) }
-            .disabled(branch == repository.branch)
-        Divider()
-        Button("Merge into \(repository.branch)") { repository.merge(branch) }
-            .disabled(branch == repository.branch)
-        Button("Rebase \(repository.branch) onto this") { repository.rebase(onto: branch) }
-            .disabled(branch == repository.branch)
-        Button("Interactive Rebase…") { repository.prepareInteractiveRebase(onto: branch) }
-            .disabled(branch == repository.branch)
-        Divider()
-        Button("Add Worktree…") {
-            repository.worktreeBranch = branch
-            repository.showsAddWorktree = true
-        }
-        .disabled(repository.checkedOutWorktreeBranches.contains(branch))
-        Button("Rename…") { repository.beginRenameBranch(branch) }
-        Button("Delete…", role: .destructive) { repository.deletingBranch = branch }
-            .disabled(branch == repository.branch)
-    }
-
     private func sectionHeader(_ title: String, action: @escaping () -> Void) -> some View {
         HStack {
             Text(title)
@@ -710,6 +673,101 @@ private struct SidebarView: View {
             .help("Add \(title)")
         }
         .frame(height: 24)
+    }
+}
+
+private struct BranchTreeNode: Identifiable {
+    let id: String
+    let name: String
+    let branch: String?
+    let children: [BranchTreeNode]
+}
+
+private func branchTree(_ branches: [String], prefix: String = "") -> [BranchTreeNode] {
+    let groups = Dictionary(grouping: branches) { $0.split(separator: "/", maxSplits: 1).first.map(String.init) ?? $0 }
+    return groups.keys.sorted { $0.localizedStandardCompare($1) == .orderedAscending }.map { name in
+        let fullName = prefix.isEmpty ? name : "\(prefix)/\(name)"
+        let suffixes = groups[name, default: []].compactMap { branch -> String? in
+            let parts = branch.split(separator: "/", maxSplits: 1)
+            return parts.count == 2 ? String(parts[1]) : nil
+        }
+        return BranchTreeNode(
+            id: suffixes.isEmpty ? "branch:\(fullName)" : "folder:\(fullName)",
+            name: name,
+            branch: suffixes.isEmpty ? fullName : nil,
+            children: branchTree(suffixes, prefix: fullName)
+        )
+    }
+}
+
+private struct BranchTreeRows: View {
+    enum Scope { case local, remote }
+
+    @Environment(RepositoryStore.self) private var repository
+    let nodes: [BranchTreeNode]
+    let scope: Scope
+
+    var body: some View {
+        ForEach(nodes) { node in
+            if let branch = node.branch {
+                BranchRow(name: node.name, isCurrent: scope == .local && branch == repository.branch)
+                    .tag("\(scope == .local ? "local" : "remote"):\(branch)")
+                    .contentShape(Rectangle())
+                    .onTapGesture(count: 2) { switchTo(branch) }
+                    .contextMenu { branchMenu(branch) }
+            } else {
+                DisclosureGroup {
+                    BranchTreeRows(nodes: node.children, scope: scope)
+                } label: {
+                    Label(node.name, systemImage: scope == .remote && node.id.count == "folder:".count + node.name.count ? "externaldrive" : "folder")
+                        .lineLimit(1)
+                }
+            }
+        }
+    }
+
+    private func switchTo(_ branch: String) {
+        scope == .local ? repository.switchBranch(branch) : repository.switchRemoteBranch(branch)
+    }
+
+    @ViewBuilder
+    private func branchMenu(_ branch: String) -> some View {
+        Button(scope == .local ? "Switch" : "Check Out") { switchTo(branch) }
+            .disabled(scope == .local && branch == repository.branch)
+        Divider()
+        Button("Merge into \(repository.branch)") { repository.merge(branch) }
+            .disabled(scope == .local && branch == repository.branch)
+        Button("Rebase \(repository.branch) onto this") { repository.rebase(onto: branch) }
+            .disabled(scope == .local && branch == repository.branch)
+        Button("Interactive Rebase…") { repository.prepareInteractiveRebase(onto: branch) }
+            .disabled(scope == .local && branch == repository.branch)
+        Divider()
+        if scope == .local {
+            Button("Add Worktree…") {
+                repository.worktreeBranch = branch
+                repository.showsAddWorktree = true
+            }
+            .disabled(repository.checkedOutWorktreeBranches.contains(branch))
+            Button("Rename…") { repository.beginRenameBranch(branch) }
+            Button("Delete…", role: .destructive) { repository.deletingBranch = branch }
+                .disabled(branch == repository.branch)
+        } else if let remote = branch.split(separator: "/").first.map(String.init) {
+            Button("Fetch \(remote)") { repository.fetch(remote) }
+        }
+    }
+}
+
+private struct LocalBranchMenu: View {
+    @Environment(RepositoryStore.self) private var repository
+    let branch: String
+
+    var body: some View {
+        Button("Add Worktree…") {
+            repository.worktreeBranch = branch
+            repository.showsAddWorktree = true
+        }
+        .disabled(repository.checkedOutWorktreeBranches.contains(branch))
+        Button("Rename…") { repository.beginRenameBranch(branch) }
     }
 }
 
