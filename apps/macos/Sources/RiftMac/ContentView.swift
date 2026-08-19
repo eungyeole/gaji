@@ -635,10 +635,11 @@ private struct SidebarView: View {
                         if folder != name {
                             Text(folder)
                                 .font(.caption2)
-                                .foregroundStyle(.secondary)
+                                .opacity(0.65)
                                 .lineLimit(1)
                         }
                     }
+                    .frame(height: 22)
                     .tag("worktree:\(worktree.path)")
                     .contentShape(Rectangle())
                     .onTapGesture(count: 2) {
@@ -661,6 +662,9 @@ private struct SidebarView: View {
                 }
             }
             .listStyle(.sidebar)
+            .controlSize(.small)
+            .environment(\.defaultMinListRowHeight, 22)
+            .tint(Color(red: 0.04, green: 0.52, blue: 1.0))
             .scrollContentBackground(.hidden)
             .onAppear { selectedItem = "local:\(repository.branch)" }
             .onChange(of: repository.branch) { _, branch in
@@ -717,9 +721,14 @@ private struct BranchRow: View {
         HStack {
             Text(name).lineLimit(1)
             Spacer(minLength: 4)
+            if isCurrent {
+                Text("HEAD")
+                    .font(.caption2.weight(.semibold))
+                    .opacity(0.7)
+            }
         }
-        .foregroundStyle(isCurrent ? Color.accentColor : Color.primary)
-        .frame(height: 28)
+        .font(.callout)
+        .frame(height: 22)
     }
 }
 
