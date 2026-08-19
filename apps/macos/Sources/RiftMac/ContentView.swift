@@ -194,45 +194,49 @@ struct ContentView: View {
         }
         .navigationTitle(repository.title)
         .toolbar {
-            ToolbarItemGroup {
-                Menu {
-                    Section("Pull Strategy") {
-                        ForEach(PullBehavior.allCases, id: \.self) { behavior in
-                            Button {
-                                repository.pull(behavior)
-                            } label: {
-                                if repository.pullBehavior == behavior {
-                                    Label(behavior.title, systemImage: "checkmark")
-                                } else {
-                                    Text(behavior.title)
+            ToolbarItem {
+                ControlGroup {
+                    Menu {
+                        Section("Pull Strategy") {
+                            ForEach(PullBehavior.allCases, id: \.self) { behavior in
+                                Button {
+                                    repository.pull(behavior)
+                                } label: {
+                                    if repository.pullBehavior == behavior {
+                                        Label(behavior.title, systemImage: "checkmark")
+                                    } else {
+                                        Text(behavior.title)
+                                    }
                                 }
                             }
                         }
+                        Divider()
+                        Button("Fetch All", action: repository.fetch)
+                        Button("Refresh View", action: repository.refresh)
+                    } label: {
+                        Label("Pull", systemImage: "arrow.down.to.line")
+                    } primaryAction: {
+                        repository.pull()
                     }
-                    Divider()
-                    Button("Fetch All", action: repository.fetch)
-                    Button("Refresh View", action: repository.refresh)
-                } label: {
-                    Label("Pull", systemImage: "arrow.down.to.line")
-                } primaryAction: {
-                    repository.pull()
+                    .help("Pull using \(repository.pullBehavior.title)")
+                    .disabled(repository.root == nil || repository.isBusy)
+                    Button(action: repository.push) {
+                        Label("Push", systemImage: "arrow.up.to.line")
+                    }
+                    .disabled(repository.root == nil || repository.isBusy)
                 }
-                .help("Pull using \(repository.pullBehavior.title)")
-                .disabled(repository.root == nil || repository.isBusy)
-                Button(action: repository.push) {
-                    Label("Push", systemImage: "arrow.up.to.line")
-                }
-                .disabled(repository.root == nil || repository.isBusy)
             }
-            ToolbarItemGroup {
-                Button(action: repository.stash) {
-                    Label("Stash", systemImage: "shippingbox")
+            ToolbarItem {
+                ControlGroup {
+                    Button(action: repository.stash) {
+                        Label("Stash", systemImage: "tray.and.arrow.down")
+                    }
+                    .disabled(repository.root == nil || repository.isBusy)
+                    Button(action: repository.popStash) {
+                        Label("Pop", systemImage: "tray.and.arrow.up")
+                    }
+                    .disabled(repository.root == nil || repository.stashes.isEmpty || repository.isBusy)
                 }
-                .disabled(repository.root == nil || repository.isBusy)
-                Button(action: repository.popStash) {
-                    Label("Pop", systemImage: "shippingbox.and.arrow.up")
-                }
-                .disabled(repository.root == nil || repository.stashes.isEmpty || repository.isBusy)
             }
         }
         .sheet(isPresented: $repository.showsCreateBranch) {
