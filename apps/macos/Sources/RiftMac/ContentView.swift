@@ -584,19 +584,15 @@ private struct WelcomeView: View {
 private struct SidebarView: View {
     @Environment(RepositoryStore.self) private var repository
     @Environment(WorkspaceStore.self) private var workspace
-    @State private var hoveredItem: String?
+    @State private var selectedItem: String?
 
     var body: some View {
         VStack(spacing: 0) {
-            List {
+            List(selection: $selectedItem) {
                 Section {
                 ForEach(repository.branches, id: \.self) { branch in
                     BranchRow(name: branch, isCurrent: branch == repository.branch)
-                        .sidebarRow(
-                            id: "local:\(branch)",
-                            isSelected: branch == repository.branch,
-                            hoveredItem: $hoveredItem
-                        )
+                        .tag("local:\(branch)")
                         .contentShape(Rectangle())
                         .onTapGesture(count: 2) { repository.switchBranch(branch) }
                         .contextMenu { localBranchMenu(branch) }
@@ -608,10 +604,7 @@ private struct SidebarView: View {
                 Section {
                 ForEach(repository.remoteBranches, id: \.self) { branch in
                     BranchRow(name: branch, isCurrent: false)
-                        .sidebarRow(
-                            id: "remote:\(branch)", isSelected: false,
-                            hoveredItem: $hoveredItem
-                        )
+                        .tag("remote:\(branch)")
                         .contentShape(Rectangle())
                         .onTapGesture(count: 2) { repository.switchRemoteBranch(branch) }
                         .contextMenu {
@@ -646,11 +639,7 @@ private struct SidebarView: View {
                                 .lineLimit(1)
                         }
                     }
-                    .sidebarRow(
-                        id: "worktree:\(worktree.path)",
-                        isSelected: worktree.path == repository.root?.path(),
-                        hoveredItem: $hoveredItem
-                    )
+                    .tag("worktree:\(worktree.path)")
                     .contentShape(Rectangle())
                     .onTapGesture(count: 2) {
                         workspace.openRepository(URL(fileURLWithPath: worktree.path))
@@ -672,8 +661,11 @@ private struct SidebarView: View {
                 }
             }
             .listStyle(.sidebar)
-            .contentMargins(.top, 4, for: .scrollContent)
             .scrollContentBackground(.hidden)
+            .onAppear { selectedItem = "local:\(repository.branch)" }
+            .onChange(of: repository.branch) { _, branch in
+                selectedItem = "local:\(branch)"
+            }
         }
     }
 
@@ -728,28 +720,6 @@ private struct BranchRow: View {
         }
         .foregroundStyle(isCurrent ? Color.accentColor : Color.primary)
         .frame(height: 28)
-    }
-}
-
-private extension View {
-    func sidebarRow(
-        id: String, isSelected: Bool, hoveredItem: Binding<String?>
-    ) -> some View {
-        self
-            .listRowBackground(
-                RoundedRectangle(cornerRadius: 7)
-                    .fill(
-                        isSelected
-                            ? Color.accentColor.opacity(0.16)
-                            : hoveredItem.wrappedValue == id
-                                ? Color.primary.opacity(0.065) : Color.clear
-                    )
-            )
-            .onHover { isHovered in
-                hoveredItem.wrappedValue = isHovered ? id : nil
-            }
-            .listRowInsets(.init(top: 2, leading: 4, bottom: 2, trailing: 4))
-            .listRowSeparator(.hidden)
     }
 }
 
