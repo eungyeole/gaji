@@ -1086,13 +1086,14 @@ private struct CommitList: View {
     var body: some View {
         @Bindable var repository = repository
         let rows = visibleRows
-        let graphWidth = CGFloat(rows.map { max($0.topLanes.count, $0.bottomLanes.count) }.max() ?? 1) * 16
+        let laneCount = rows.map { max($0.topLanes.count, $0.bottomLanes.count) }.max() ?? 1
+        let laneSpacing = laneCount > 1 ? min(16, 104 / CGFloat(laneCount - 1)) : 16
 
         List(rows, selection: $selection) { row in
             let commit = row.commit
             HStack(spacing: 8) {
                 CommitReferences(references: commit.references)
-                CommitGraph(row: row, width: graphWidth)
+                CommitGraph(row: row, spacing: laneSpacing)
                 Text(commit.subject)
                     .foregroundStyle(.primary)
                     .fontWeight(.medium)
@@ -1135,6 +1136,7 @@ private struct CommitList: View {
 }
 
 private struct CommitReferences: View {
+    @Environment(RepositoryStore.self) private var repository
     let references: [String]
 
     var body: some View {
@@ -1147,6 +1149,8 @@ private struct CommitReferences: View {
                     .padding(.horizontal, 7)
                     .padding(.vertical, 3)
                     .background(reference.hasPrefix("tag: ") ? Color.orange : Color.accentColor, in: Capsule())
+                    .contentShape(Capsule())
+                    .onTapGesture(count: 2, perform: checkOut)
                 if references.count > 1 {
                     Text("+\(references.count - 1)")
                         .font(.caption2)
@@ -1163,6 +1167,15 @@ private struct CommitReferences: View {
             .replacingOccurrences(of: "HEAD -> ", with: "")
             .replacingOccurrences(of: "tag: ", with: "")
     }
+
+    private func checkOut() {
+        let names = references.map(clean)
+        if let branch = names.first(where: { repository.branches.contains($0) }) {
+            repository.switchBranch(branch)
+        } else if let branch = names.first(where: { repository.remoteBranches.contains($0) }) {
+            repository.switchRemoteBranch(branch)
+        }
+    }
 }
 
 private struct CommitAvatar: View {
@@ -1178,7 +1191,14 @@ private struct CommitAvatar: View {
                     .clipShape(Circle())
                     .overlay(Circle().stroke(Color.accentColor, lineWidth: 1.5))
             } else {
-                Color.clear
+                Circle()
+                    .fill(Color.accentColor.opacity(0.22))
+                    .overlay {
+                        Text(String(commit.author.prefix(1)).uppercased())
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundStyle(.tint)
+                    }
+                    .overlay(Circle().stroke(Color.accentColor, lineWidth: 1.5))
             }
         }
         .frame(width: 18, height: 18)
@@ -1220,8 +1240,7 @@ private func commitGraphRows(_ commits: [Commit]) -> [CommitGraphRow] {
 
 private struct CommitGraph: View {
     let row: CommitGraphRow
-    let width: CGFloat
-    private let spacing: CGFloat = 16
+    let spacing: CGFloat
     private let colors: [Color] = [.blue, .purple, .orange, .green, .pink, .cyan, .indigo, .mint]
 
     var body: some View {
@@ -1263,12 +1282,10 @@ private struct CommitGraph: View {
                 context.fill(Path(ellipseIn: node), with: .color(color))
                 context.stroke(Path(ellipseIn: node), with: .color(.white.opacity(0.75)), lineWidth: 1.5)
             }
-            if row.commit.parents.count < 2 {
-                CommitAvatar(commit: row.commit)
-                    .offset(x: x(row.nodeLane) - 9, y: 3)
-            }
+            CommitAvatar(commit: row.commit)
+                .offset(x: x(row.nodeLane) - 9, y: 3)
         }
-        .frame(width: max(24, width))
+        .frame(width: 120)
         .frame(height: 24)
         .accessibilityHidden(true)
     }
