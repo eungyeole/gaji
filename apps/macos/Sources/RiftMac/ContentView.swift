@@ -1240,9 +1240,15 @@ private struct StashFileRow: View {
         }
         .contentShape(Rectangle())
         .onTapGesture {
+            isHovering = true
             isSelected ? repository.closeFileDetails() : repository.selectStashFile(change)
         }
-        .onHover { isHovering = $0 }
+        .onContinuousHover { phase in
+            switch phase {
+            case .active: isHovering = true
+            case .ended: isHovering = false
+            }
+        }
         .help(change.path)
     }
 }
@@ -1267,9 +1273,15 @@ private struct CommitFileRow: View {
         }
         .contentShape(Rectangle())
         .onTapGesture {
+            isHovering = true
             isSelected ? repository.closeFileDetails() : repository.selectCommitFile(change)
         }
-        .onHover { isHovering = $0 }
+        .onContinuousHover { phase in
+            switch phase {
+            case .active: isHovering = true
+            case .ended: isHovering = false
+            }
+        }
         .help(change.path)
     }
 }
@@ -1374,9 +1386,15 @@ private struct ChangeFileRow: View {
         }
         .contentShape(Rectangle())
         .onTapGesture {
+            isHovering = true
             isSelected ? repository.closeFileDetails() : repository.select(change, staged: staged)
         }
-        .onHover { isHovering = $0 }
+        .onContinuousHover { phase in
+            switch phase {
+            case .active: isHovering = true
+            case .ended: isHovering = false
+            }
+        }
         .help(change.path)
         .contextMenu {
             Button(staged ? "Unstage File" : "Stage File") {
