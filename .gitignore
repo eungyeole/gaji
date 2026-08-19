@@ -8,3 +8,5 @@ DerivedData/
 apps/macos/.build/
 apps/windows/bin/
 apps/windows/obj/
+**/bin/
+**/obj/
