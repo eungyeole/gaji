@@ -228,6 +228,46 @@ struct ContentView: View {
             .frame(width: 440)
         }
         .sheet(isPresented: Binding(
+            get: { repository.blameFile != nil },
+            set: { if !$0 { repository.blameFile = nil } }
+        )) {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Text(repository.blameFile ?? "File History").font(.title2.bold())
+                    Spacer()
+                    Button("Done") { repository.blameFile = nil }
+                }
+                TabView {
+                    List(repository.blameLines) { line in
+                        HStack(alignment: .top, spacing: 10) {
+                            Text("\(line.lineNumber)")
+                                .frame(width: 44, alignment: .trailing)
+                                .foregroundStyle(.secondary)
+                            Text(String(line.commit.prefix(8)))
+                                .font(.system(.caption, design: .monospaced))
+                                .foregroundStyle(.tint)
+                            Text(line.author).frame(width: 130, alignment: .leading).lineLimit(1)
+                            Text(line.content)
+                                .font(.system(.body, design: .monospaced))
+                                .textSelection(.enabled)
+                        }
+                    }
+                    .tabItem { Label("Blame", systemImage: "person.text.rectangle") }
+                    List(repository.fileHistory) { entry in
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(entry.subject).fontWeight(.medium)
+                            Text("\(entry.author) · \(String(entry.id.prefix(10)))")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .tabItem { Label("History", systemImage: "clock") }
+                }
+            }
+            .padding(20)
+            .frame(minWidth: 900, minHeight: 620)
+        }
+        .sheet(isPresented: Binding(
             get: { repository.conflictFile != nil },
             set: { if !$0 { repository.conflictFile = nil } }
         )) {
@@ -379,6 +419,24 @@ private struct WelcomeView: View {
                         .buttonStyle(.glassProminent)
                 }
                 .controlSize(.large)
+                if !repository.recentRepositories.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Recent Repositories")
+                            .font(.caption.bold())
+                            .foregroundStyle(.secondary)
+                        ForEach(repository.recentRepositories.prefix(5), id: \.self) { path in
+                            Button {
+                                repository.openRecent(path)
+                            } label: {
+                                Label(URL(fileURLWithPath: path).lastPathComponent, systemImage: "clock")
+                                    .frame(maxWidth: 260, alignment: .leading)
+                            }
+                            .buttonStyle(.plain)
+                            .help(path)
+                        }
+                    }
+                    .padding(.top, 8)
+                }
             }
             .padding(42)
             .glassEffect(.regular, in: .rect(cornerRadius: 28))
@@ -416,6 +474,8 @@ private struct SidebarView: View {
                             if change.worktreeStatus != " " && change.worktreeStatus != "?" {
                                 Button("Discard Changes", role: .destructive) { repository.discard(change.path) }
                             }
+                            Divider()
+                            Button("Blame and File History") { repository.openBlame(change.path) }
                         }
                     }
                 }
@@ -445,6 +505,13 @@ private struct SidebarView: View {
                 TextField("Commit message", text: $repository.commitMessage, axis: .vertical)
                     .lineLimit(2...5)
                     .textFieldStyle(.roundedBorder)
+                HStack {
+                    Toggle("Amend", isOn: $repository.commitAmend)
+                    Toggle("Sign", isOn: $repository.commitSign)
+                    Toggle("Sign-off", isOn: $repository.commitSignoff)
+                }
+                .toggleStyle(.checkbox)
+                .font(.caption)
                 Button("Commit to \(repository.branch)") { repository.createCommit() }
                     .buttonStyle(.glassProminent)
                     .frame(maxWidth: .infinity, alignment: .trailing)

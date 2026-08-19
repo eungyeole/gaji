@@ -19,11 +19,18 @@ internal static class NativeCore
     private static extern nint rift_commit_graph_json([MarshalAs(UnmanagedType.LPUTF8Str)] string path, nuint limit);
 
     [DllImport("rift_ffi", CallingConvention = CallingConvention.Cdecl)]
+    private static extern nint rift_blame_json(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string path,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string file);
+
+    [DllImport("rift_ffi", CallingConvention = CallingConvention.Cdecl)]
     private static extern void rift_string_free(nint value);
 
     public static CoreSnapshot Inspect(string path) => Decode<CoreSnapshot>(rift_inspect_json(path));
     public static CoreGraphCommit[] Graph(string path, nuint limit = 500) =>
         Decode<CoreGraphCommit[]>(rift_commit_graph_json(path, limit));
+    public static CoreBlameLine[] Blame(string path, string file) =>
+        Decode<CoreBlameLine[]>(rift_blame_json(path, file));
 
     public static void Execute(object request)
     {
@@ -59,3 +66,4 @@ internal sealed record CoreChange(string IndexStatus, string WorktreeStatus, str
 internal sealed record CoreCommit(string Id, string Author, string AuthoredAt, string Subject);
 internal sealed record CoreGraphCommit(
     string Id, string[] Parents, string[] References, string Author, string AuthoredAt, string Subject);
+internal sealed record CoreBlameLine(int LineNumber, string Commit, string Author, long AuthoredAt, string Content);

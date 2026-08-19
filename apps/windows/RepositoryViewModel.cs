@@ -13,6 +13,9 @@ public sealed class RepositoryViewModel : INotifyPropertyChanged
     private string detailTitle = "Welcome to Rift";
     private string detailText = "Open a local Git repository to begin.";
     private string commitMessage = "";
+    private bool commitAmend;
+    private bool commitSign;
+    private bool commitSignoff;
     private string? operation;
     private FileChangeItem? selectedChange;
     private CommitItem? selectedCommit;
@@ -22,22 +25,35 @@ public sealed class RepositoryViewModel : INotifyPropertyChanged
     public ObservableCollection<FileChangeItem> Changes { get; } = [];
     public ObservableCollection<string> Branches { get; } = [];
     public ObservableCollection<string> Tags { get; } = [];
+    public ObservableCollection<string> RecentRepositories { get; } = [];
     public string RepositoryName { get => repositoryName; private set => Set(ref repositoryName, value); }
     public string Branch { get => branch; private set => Set(ref branch, value); }
     public string DetailTitle { get => detailTitle; private set => Set(ref detailTitle, value); }
     public string DetailText { get => detailText; private set => Set(ref detailText, value); }
     public string CommitMessage { get => commitMessage; set => Set(ref commitMessage, value); }
+    public bool CommitAmend { get => commitAmend; set => Set(ref commitAmend, value); }
+    public bool CommitSign { get => commitSign; set => Set(ref commitSign, value); }
+    public bool CommitSignoff { get => commitSignoff; set => Set(ref commitSignoff, value); }
     public int ChangeCount => Changes.Count;
     public bool HasOperation => operation is not null;
     public bool HasSelectedConflict => selectedChange?.IsConflict == true;
+    public bool HasSelectedFile => selectedChange is not null;
     public bool HasSelectedCommit => selectedCommit is not null;
 
     public event PropertyChangedEventHandler? PropertyChanged;
+
+    public RepositoryViewModel()
+    {
+        if (File.Exists(SettingsPath))
+            foreach (var path in File.ReadAllLines(SettingsPath).Where(Directory.Exists).Take(10))
+                RecentRepositories.Add(path);
+    }
 
     public void Open(string path)
     {
         root = NativeCore.Inspect(path).Root;
         RepositoryName = Path.GetFileName(root);
+        RememberRepository(root);
         Refresh();
     }
 
@@ -103,6 +119,7 @@ public sealed class RepositoryViewModel : INotifyPropertyChanged
         if (root is null) return;
         selectedChange = change;
         OnPropertyChanged(nameof(HasSelectedConflict));
+        OnPropertyChanged(nameof(HasSelectedFile));
         DetailTitle = change.Path;
         if (change.IsConflict)
         {
@@ -129,12 +146,29 @@ public sealed class RepositoryViewModel : INotifyPropertyChanged
         });
         selectedChange = null;
         OnPropertyChanged(nameof(HasSelectedConflict));
+        OnPropertyChanged(nameof(HasSelectedFile));
+    }
+
+    public void ShowBlame()
+    {
+        if (root is null || selectedChange is null) return;
+        try
+        {
+            var lines = NativeCore.Blame(root, selectedChange.Path);
+            DetailTitle = $"Blame · {selectedChange.Path}";
+            DetailText = string.Join('\n', lines.Select(line =>
+                $"{line.LineNumber,5} {line.Commit[..Math.Min(8, line.Commit.Length)]} {line.Author,-18} {line.Content}"));
+        }
+        catch (Exception error) { DetailTitle = "Git error"; DetailText = error.Message; }
     }
 
     public void Commit()
     {
         if (root is null || string.IsNullOrWhiteSpace(CommitMessage)) return;
-        RunNative(new { action = "commit", path = root, message = CommitMessage.Trim(), amend = false });
+        RunNative(new {
+            action = "commit", path = root, message = CommitMessage.Trim(),
+            amend = CommitAmend, sign = CommitSign, signoff = CommitSignoff, allowEmpty = false
+        });
         CommitMessage = "";
     }
 
@@ -220,6 +254,18 @@ public sealed class RepositoryViewModel : INotifyPropertyChanged
         ? null
         : Git(root, "remote").Split('\n', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
 
+    private static string SettingsPath => Environment.GetEnvironmentVariable("RIFT_SETTINGS_PATH") ?? Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Rift", "recent.txt");
+
+    private void RememberRepository(string path)
+    {
+        var existing = RecentRepositories.Where(candidate => candidate != path).Prepend(path).Take(10).ToArray();
+        RecentRepositories.Clear();
+        foreach (var candidate in existing) RecentRepositories.Add(candidate);
+        Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
+        File.WriteAllLines(SettingsPath, existing);
+    }
+
     private void RunNative(object request)
     {
         try { NativeCore.Execute(request); }
@@ -264,6 +310,13 @@ public sealed class RepositoryViewModel : INotifyPropertyChanged
     }
 
     private void Set(ref string field, string value, [CallerMemberName] string? property = null)
+    {
+        if (field == value) return;
+        field = value;
+        OnPropertyChanged(property);
+    }
+
+    private void Set(ref bool field, bool value, [CallerMemberName] string? property = null)
     {
         if (field == value) return;
         field = value;

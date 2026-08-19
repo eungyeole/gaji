@@ -56,6 +56,22 @@ fn stages_diffs_commits_and_manages_branches() {
     assert_eq!(staged[0].additions, Some(1));
 
     let head = rift_core::commit(repository.path(), "initial", false).unwrap();
+    repository.write("hello.txt", "hello again\n");
+    rift_core::stage(repository.path(), &["hello.txt"]).unwrap();
+    rift_core::commit_with_options(
+        repository.path(),
+        "signed off",
+        rift_core::CommitOptions {
+            signoff: true,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert!(
+        repository
+            .git(&["log", "-1", "--format=%B"])
+            .contains("Signed-off-by: Rift Test")
+    );
     rift_core::create_branch(repository.path(), "feature", &head, true).unwrap();
     let branches = rift_core::branches(repository.path()).unwrap();
     assert_eq!(branches.len(), 2);

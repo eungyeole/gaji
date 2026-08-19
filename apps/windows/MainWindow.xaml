@@ -42,6 +42,8 @@
             <AppBarSeparator />
             <AppBarButton Icon="Tag" Label="Create Tag" Click="CreateTag_Click" IsEnabled="{x:Bind ViewModel.HasSelectedCommit, Mode=OneWay}" />
             <AppBarButton Icon="World" Label="Add Remote" Click="AddRemote_Click" />
+            <AppBarButton Icon="Contact" Label="Blame" Click="Blame_Click"
+                          IsEnabled="{x:Bind ViewModel.HasSelectedFile, Mode=OneWay}" />
             <AppBarSeparator />
             <AppBarButton Label="Use Current" Click="UseCurrent_Click" IsEnabled="{x:Bind ViewModel.HasSelectedConflict, Mode=OneWay}" />
             <AppBarButton Label="Use Incoming" Click="UseIncoming_Click" IsEnabled="{x:Bind ViewModel.HasSelectedConflict, Mode=OneWay}" />
@@ -56,6 +58,13 @@
                     <TextBlock Text="{x:Bind ViewModel.Branch, Mode=OneWay}" Opacity="0.65" />
                 </StackPanel>
             </NavigationView.PaneHeader>
+            <NavigationView.PaneFooter>
+                <StackPanel Margin="8" Spacing="6">
+                    <TextBlock Text="Recent" FontWeight="SemiBold" />
+                    <ListView ItemsSource="{x:Bind ViewModel.RecentRepositories}"
+                              MaxHeight="180" SelectionChanged="RecentRepository_SelectionChanged" />
+                </StackPanel>
+            </NavigationView.PaneFooter>
             <NavigationView.MenuItems>
                 <NavigationViewItem Content="History" Icon="Clock" />
                 <NavigationViewItem Content="Changes" Icon="Edit">
@@ -130,8 +139,16 @@
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <TextBox Text="{x:Bind ViewModel.CommitMessage, Mode=TwoWay}" PlaceholderText="Commit message" />
-            <Button Grid.Column="1" Content="Commit" Style="{StaticResource AccentButtonStyle}" Click="Commit_Click" />
+            <StackPanel Spacing="8">
+                <TextBox Text="{x:Bind ViewModel.CommitMessage, Mode=TwoWay}" PlaceholderText="Commit message" />
+                <StackPanel Orientation="Horizontal" Spacing="12">
+                    <CheckBox Content="Amend" IsChecked="{x:Bind ViewModel.CommitAmend, Mode=TwoWay}" />
+                    <CheckBox Content="Sign" IsChecked="{x:Bind ViewModel.CommitSign, Mode=TwoWay}" />
+                    <CheckBox Content="Sign-off" IsChecked="{x:Bind ViewModel.CommitSignoff, Mode=TwoWay}" />
+                </StackPanel>
+            </StackPanel>
+            <Button Grid.Column="1" Content="Commit" Style="{StaticResource AccentButtonStyle}"
+                    VerticalAlignment="Top" Click="Commit_Click" />
         </Grid>
     </Grid>
 </Window>

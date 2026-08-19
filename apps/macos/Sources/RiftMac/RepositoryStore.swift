@@ -59,6 +59,9 @@ final class RepositoryStore {
     var selectedHunks: [CoreDiffHunk] = []
     var selectedFileIsStaged = false
     var commitMessage = ""
+    var commitAmend = false
+    var commitSign = false
+    var commitSignoff = false
     var newBranchName = ""
     var showsCreateBranch = false
     var pendingHardReset: Commit?
@@ -79,10 +82,15 @@ final class RepositoryStore {
     var taggingCommit: Commit?
     var newTagName = ""
     var searchText = ""
+    var blameFile: String?
+    var blameLines: [CoreBlameLine] = []
+    var fileHistory: [CoreHistoryEntry] = []
+    private(set) var recentRepositories: [String] = []
 
     var title: String { root?.lastPathComponent ?? "Rift" }
 
     init() {
+        recentRepositories = UserDefaults.standard.stringArray(forKey: "recentRepositories") ?? []
         if let path = UserDefaults.standard.string(forKey: "lastRepository"),
            FileManager.default.fileExists(atPath: path) {
             open(URL(fileURLWithPath: path))
@@ -105,10 +113,23 @@ final class RepositoryStore {
             let snapshot = try CoreBridge.inspect(url.path())
             root = URL(fileURLWithPath: snapshot.root)
             UserDefaults.standard.set(snapshot.root, forKey: "lastRepository")
+            recentRepositories.removeAll { $0 == snapshot.root }
+            recentRepositories.insert(snapshot.root, at: 0)
+            recentRepositories = Array(recentRepositories.prefix(10))
+            UserDefaults.standard.set(recentRepositories, forKey: "recentRepositories")
             refresh()
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    func openRecent(_ path: String) {
+        guard FileManager.default.fileExists(atPath: path) else {
+            recentRepositories.removeAll { $0 == path }
+            UserDefaults.standard.set(recentRepositories, forKey: "recentRepositories")
+            return
+        }
+        open(URL(fileURLWithPath: path))
     }
 
     func chooseCloneDestination() {
@@ -222,6 +243,16 @@ final class RepositoryStore {
         }
     }
 
+    func openBlame(_ file: String) {
+        do {
+            blameLines = try CoreBridge.blame(rootPath, file: file)
+            fileHistory = try CoreBridge.fileHistory(rootPath, file: file)
+            blameFile = file
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     func stage(_ file: String) {
         runCore(["action": "stage", "path": rootPath, "files": [file]])
     }
@@ -234,10 +265,14 @@ final class RepositoryStore {
         runCore(["action": "discard", "path": rootPath, "files": [file]])
     }
 
-    func createCommit(amend: Bool = false) {
+    func createCommit(amend: Bool? = nil) {
         let message = commitMessage.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !message.isEmpty else { return }
-        runCore(["action": "commit", "path": rootPath, "message": message, "amend": amend])
+        runCore([
+            "action": "commit", "path": rootPath, "message": message,
+            "amend": amend ?? commitAmend, "sign": commitSign,
+            "signoff": commitSignoff, "allowEmpty": false
+        ])
         if errorMessage == nil { commitMessage = "" }
     }
 

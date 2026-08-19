@@ -101,6 +101,14 @@ pub enum ResetMode {
     Hard,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct CommitOptions {
+    pub amend: bool,
+    pub sign: bool,
+    pub signoff: bool,
+    pub allow_empty: bool,
+}
+
 pub fn diff_summary(path: impl AsRef<Path>, staged: bool) -> Result<Vec<DiffSummary>, RiftError> {
     let root = root(path.as_ref())?;
     let mut arguments = vec!["diff", "--numstat", "-z"];
@@ -175,14 +183,38 @@ pub fn discard(path: impl AsRef<Path>, files: &[&str]) -> Result<(), RiftError> 
 }
 
 pub fn commit(path: impl AsRef<Path>, message: &str, amend: bool) -> Result<String, RiftError> {
+    commit_with_options(
+        path,
+        message,
+        CommitOptions {
+            amend,
+            ..CommitOptions::default()
+        },
+    )
+}
+
+pub fn commit_with_options(
+    path: impl AsRef<Path>,
+    message: &str,
+    options: CommitOptions,
+) -> Result<String, RiftError> {
     require_value("commit message", message)?;
     let root = root(path.as_ref())?;
-    let output = if amend {
-        git(&root, &["commit", "--amend", "-m", message])?
-    } else {
-        git(&root, &["commit", "-m", message])?
-    };
-    let _ = output;
+    let mut arguments = vec!["commit"];
+    if options.amend {
+        arguments.push("--amend");
+    }
+    if options.sign {
+        arguments.push("-S");
+    }
+    if options.signoff {
+        arguments.push("--signoff");
+    }
+    if options.allow_empty {
+        arguments.push("--allow-empty");
+    }
+    arguments.extend(["-m", message]);
+    git(&root, &arguments)?;
     git(&root, &["rev-parse", "HEAD"]).map(|value| value.trim().to_owned())
 }
 

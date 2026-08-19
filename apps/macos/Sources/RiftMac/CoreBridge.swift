@@ -48,6 +48,22 @@ struct CoreRebaseStep: Codable, Identifiable {
     var id: String { commit }
 }
 
+struct CoreBlameLine: Decodable, Identifiable {
+    let lineNumber: Int
+    let commit: String
+    let author: String
+    let authoredAt: Int64
+    let content: String
+    var id: Int { lineNumber }
+}
+
+struct CoreHistoryEntry: Decodable, Identifiable {
+    let id: String
+    let author: String
+    let authoredAt: String
+    let subject: String
+}
+
 private struct CoreEnvelope<Value: Decodable>: Decodable {
     let ok: Bool
     let value: Value?
@@ -91,6 +107,20 @@ enum CoreBridge {
             }
         }
         return try decode(pointer, as: [CoreRebaseStep].self)
+    }
+
+    static func blame(_ path: String, file: String) throws -> [CoreBlameLine] {
+        let pointer = path.withCString { pathPointer in
+            file.withCString { filePointer in rift_blame_json(pathPointer, filePointer) }
+        }
+        return try decode(pointer, as: [CoreBlameLine].self)
+    }
+
+    static func fileHistory(_ path: String, file: String) throws -> [CoreHistoryEntry] {
+        let pointer = path.withCString { pathPointer in
+            file.withCString { filePointer in rift_file_history_json(pathPointer, filePointer) }
+        }
+        return try decode(pointer, as: [CoreHistoryEntry].self)
     }
 
     static func execute(_ request: [String: Any]) throws {

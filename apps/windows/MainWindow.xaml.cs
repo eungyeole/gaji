@@ -66,6 +66,7 @@ public sealed partial class MainWindow : Window
     private void Abort_Click(object sender, RoutedEventArgs e) => ViewModel.AbortOperation();
     private void UseCurrent_Click(object sender, RoutedEventArgs e) => ViewModel.ResolveSelected("--ours");
     private void UseIncoming_Click(object sender, RoutedEventArgs e) => ViewModel.ResolveSelected("--theirs");
+    private void Blame_Click(object sender, RoutedEventArgs e) => ViewModel.ShowBlame();
 
     private async void CreateTag_Click(object sender, RoutedEventArgs e)
     {
@@ -113,4 +114,9 @@ public sealed partial class MainWindow : Window
 
     private void Search_TextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args) =>
         ViewModel.FilterCommits(sender.Text);
+
+    private void RecentRepository_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if ((sender as ListView)?.SelectedItem is string path) ViewModel.Open(path);
+    }
 }

@@ -42,6 +42,12 @@ enum Request {
         path: String,
         message: String,
         amend: bool,
+        #[serde(default)]
+        sign: bool,
+        #[serde(default)]
+        signoff: bool,
+        #[serde(default)]
+        allow_empty: bool,
     },
     CherryPick {
         path: String,
@@ -268,6 +274,63 @@ pub unsafe extern "C" fn rift_file_hunks_json(
 }
 
 #[unsafe(no_mangle)]
+/// Reads blame metadata for a file.
+///
+/// # Safety
+/// Both pointers must be null or point to valid, NUL-terminated C strings. The
+/// return value must be released exactly once with [`rift_string_free`].
+pub unsafe extern "C" fn rift_blame_json(path: *const c_char, file: *const c_char) -> *mut c_char {
+    respond(|| {
+        let path = unsafe { required_string(path, "path")? };
+        let file = unsafe { required_string(file, "file")? };
+        rift_core::blame(path, &file).map_err(|error| error.to_string())
+    })
+}
+
+#[unsafe(no_mangle)]
+/// Reads rename-aware history for a file.
+///
+/// # Safety
+/// Both pointers must be null or point to valid, NUL-terminated C strings. The
+/// return value must be released exactly once with [`rift_string_free`].
+pub unsafe extern "C" fn rift_file_history_json(
+    path: *const c_char,
+    file: *const c_char,
+) -> *mut c_char {
+    respond(|| {
+        let path = unsafe { required_string(path, "path")? };
+        let file = unsafe { required_string(file, "file")? };
+        rift_core::file_history(path, &file).map_err(|error| error.to_string())
+    })
+}
+
+#[unsafe(no_mangle)]
+/// Lists linked worktrees.
+///
+/// # Safety
+/// `path` must be null or point to a valid, NUL-terminated C string. The return
+/// value must be released exactly once with [`rift_string_free`].
+pub unsafe extern "C" fn rift_worktrees_json(path: *const c_char) -> *mut c_char {
+    respond(|| {
+        let path = unsafe { required_string(path, "path")? };
+        rift_core::worktrees(path).map_err(|error| error.to_string())
+    })
+}
+
+#[unsafe(no_mangle)]
+/// Lists configured submodules and their checkout state.
+///
+/// # Safety
+/// `path` must be null or point to a valid, NUL-terminated C string. The return
+/// value must be released exactly once with [`rift_string_free`].
+pub unsafe extern "C" fn rift_submodules_json(path: *const c_char) -> *mut c_char {
+    respond(|| {
+        let path = unsafe { required_string(path, "path")? };
+        rift_core::submodules(path).map_err(|error| error.to_string())
+    })
+}
+
+#[unsafe(no_mangle)]
 /// Executes a JSON-encoded request and returns an owned UTF-8 JSON response.
 ///
 /// # Safety
@@ -318,7 +381,20 @@ fn execute(request: Request) -> Result<(), String> {
             path,
             message,
             amend,
-        } => rift_core::commit(path, &message, amend).map(|_| ()),
+            sign,
+            signoff,
+            allow_empty,
+        } => rift_core::commit_with_options(
+            path,
+            &message,
+            rift_core::CommitOptions {
+                amend,
+                sign,
+                signoff,
+                allow_empty,
+            },
+        )
+        .map(|_| ()),
         Request::CherryPick { path, revision } => rift_core::cherry_pick(path, &revision),
         Request::Rebase { path, upstream } => rift_core::rebase_onto(path, &upstream),
         Request::InteractiveRebase {
