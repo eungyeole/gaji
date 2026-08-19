@@ -1,8 +1,21 @@
 import SwiftUI
+import Sparkle
 
 @main
 struct RiftApp: App {
     @State private var workspace = WorkspaceStore()
+    private let updater = SPUStandardUpdaterController(
+        startingUpdater: Self.hasUpdateSignature,
+        updaterDelegate: nil,
+        userDriverDelegate: nil
+    )
+
+    private static var hasUpdateSignature: Bool {
+        guard let key = Bundle.main.object(forInfoDictionaryKey: "SUPublicEDKey") as? String else {
+            return false
+        }
+        return !key.isEmpty && !key.hasPrefix("__")
+    }
 
     var body: some Scene {
         WindowGroup {
@@ -24,6 +37,12 @@ struct RiftApp: App {
                 Button("Refresh") { workspace.selectedRepository.refresh() }
                     .keyboardShortcut("r")
                     .disabled(workspace.selectedRepository.root == nil)
+            }
+            CommandGroup(after: .appInfo) {
+                Button("Check for Updates…") {
+                    updater.checkForUpdates(nil)
+                }
+                .disabled(!Self.hasUpdateSignature)
             }
         }
         .defaultSize(width: 1280, height: 800)

@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Rift is a native Git workspace for macOS, powered by a shared Rust core.">
+  <meta name="theme-color" content="#090b10">
+  <title>Rift — Native Git, at home on your Mac</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="nav shell">
+    <a class="brand" href="#top" aria-label="Rift home">
+      <svg viewBox="0 0 36 36" aria-hidden="true"><defs><linearGradient id="mark"><stop stop-color="#a093ff"/><stop offset="1" stop-color="#36bffa"/></linearGradient></defs><path fill="url(#mark)" d="M8 4h11.6C26.5 4 31 7.8 31 13.8c0 4-2.1 7-5.8 8.7L32 32h-8.2l-5.6-8.3h-3V32H8V4Zm7.2 6.1v7.7h4c2.9 0 4.5-1.4 4.5-3.9s-1.6-3.8-4.5-3.8h-4Z"/></svg>
+      <span>Rift</span>
+    </a>
+    <nav aria-label="Primary"><a href="#features">Features</a><a href="#architecture">Architecture</a><a href="https://github.com/eungyeole/rift">GitHub</a></nav>
+  </header>
+
+  <main id="top">
+    <section class="hero shell">
+      <p class="eyebrow"><i></i> Native on macOS 26</p>
+      <h1>Your Git history,<br><em>without the noise.</em></h1>
+      <p class="lede">Branches, commits, changes, stashes, and diffs in one calm, platform-native workspace—powered by Rust, shaped for the Mac.</p>
+      <div class="actions"><a class="button primary" href="https://github.com/eungyeole/rift">View on GitHub</a><a class="button" href="#build">Build from source</a></div>
+      <p class="availability">Active development · macOS 26+ · Open source</p>
+
+      <div class="app-window" aria-label="Stylized preview of the Rift repository workspace">
+        <div class="window-bar"><i></i><i></i><i></i><span>rift</span></div>
+        <div class="app-grid">
+          <aside class="mock-sidebar"><small>LOCAL</small><b class="selected">●&nbsp; main</b><b>feature/inspector</b><small>REMOTE</small><b>origin/main</b><small>STASHES</small><b>WIP: diff polish</b></aside>
+          <div class="mock-history">
+            <div class="commit"><span></span><p><b>Polish repository inspector</b><small>main · origin/main</small></p></div>
+            <div class="commit branch blue"><span></span><p><b>Cache file diff details</b><small>e82a3d1</small></p></div>
+            <div class="commit violet"><span></span><p><b>Inspect stashed changes</b><small>feature/inspector</small></p></div>
+            <div class="commit"><span></span><p><b>Refine loading feedback</b><small>7fa21de</small></p></div>
+            <div class="commit"><span></span><p><b>Unify change rows</b><small>24021e3</small></p></div>
+          </div>
+          <aside class="mock-inspector"><header><strong>Unstaged</strong><button>Stage all</button></header><p><i class="modified">M</i> apps/macos/ContentView.swift <b>+</b></p><p><i class="added">+</i> docs/index.html <b>+</b></p><header class="staged"><strong>Staged</strong><small>0</small></header><div class="composer"><strong>Commit</strong><span>Summary</span><button>Commit to main</button></div></aside>
+        </div>
+      </div>
+    </section>
+
+    <section class="section shell" id="features">
+      <div class="heading"><p class="eyebrow">A focused workspace</p><h2>Everything important stays close.</h2><p>No browser shell and no cross-platform imitation. Native controls and system materials keep the interface clear.</p></div>
+      <div class="feature-grid">
+        <article><span>01</span><h3>Read the graph</h3><p>Follow compact commit lanes, refs, merge paths, and authors. Select a commit to inspect every changed file.</p></article>
+        <article><span>02</span><h3>Shape a commit</h3><p>Review structured diffs, then stage or unstage whole files and individual hunks.</p></article>
+        <article><span>03</span><h3>Move between work</h3><p>Search branches, switch with a double-click, manage worktrees, and restore repository tabs.</p></article>
+        <article><span>04</span><h3>Recover context</h3><p>Browse stash contents before applying them. Inspect every saved file and its diff.</p></article>
+        <article><span>05</span><h3>Handle real Git</h3><p>Pull, resolve conflicts, rebase, cherry-pick, revert, reset, and continue without losing context.</p></article>
+        <article><span>06</span><h3>Keep your setup</h3><p>Your installed Git preserves credential helpers, SSH configuration, hooks, filters, and remotes.</p></article>
+      </div>
+    </section>
+
+    <section class="section shell" id="architecture">
+      <div class="heading"><p class="eyebrow">Shared behavior, native interfaces</p><h2>One engine. The right UI for each platform.</h2></div>
+      <div class="architecture">
+        <div class="platform active"><small>CURRENT FOCUS</small><strong>SwiftUI + AppKit</strong><span>macOS 26</span></div><b>rift-ffi</b>
+        <div class="platform core"><small>SHARED ENGINE</small><strong>rift-core</strong><span>Rust · installed Git</span></div><b>rift-ffi</b>
+        <div class="platform"><small>EARLY PREVIEW</small><strong>WinUI 3</strong><span>Windows</span></div>
+      </div>
+      <p class="note">Rust owns repository models and Git operations. Platform apps own navigation, interaction, materials, accessibility, and window behavior.</p>
+    </section>
+
+    <section class="section build shell" id="build">
+      <div><p class="eyebrow">Build the current app</p><h2>Run Rift on a Mac.</h2><p>Requires macOS 26, Xcode 26 with Swift 6.2, stable Rust, and Git.</p></div>
+      <pre><code><span>$</span> git clone https://github.com/eungyeole/rift.git
+<span>$</span> cd rift
+<span>$</span> cargo build -p rift-ffi --release
+<span>$</span> swift run --package-path apps/macos RiftMac</code></pre>
+    </section>
+
+    <section class="closing shell"><p class="eyebrow">Still taking shape</p><h2>Build the Git client<br>you want to use.</h2><p>Rift is open source and under active development. Explore the code, report an issue, or help refine the native experience.</p><a class="button primary" href="https://github.com/eungyeole/rift">Explore the repository</a></section>
+  </main>
+  <footer class="shell"><a class="brand" href="#top">Rift</a><p>Native Git for macOS. Shared Rust core.</p><a href="https://github.com/eungyeole/rift">GitHub</a></footer>
+</body>
+</html>

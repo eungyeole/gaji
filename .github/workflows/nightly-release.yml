@@ -1,0 +1,120 @@
+name: Nightly release
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nightly-release
+  cancel-in-progress: true
+
+env:
+  RELEASE_TAG: nightly
+  SPARKLE_VERSION: 2.9.4
+
+jobs:
+  macos:
+    runs-on: macos-26-intel
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - id: version
+        shell: bash
+        run: |
+          echo "version=0.1.0" >> "$GITHUB_OUTPUT"
+          echo "build=${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+      - name: Import Developer ID certificate
+        env:
+          CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        run: |
+          test -n "$CERTIFICATE_P12"
+          keychain="$RUNNER_TEMP/rift-signing.keychain-db"
+          password="$(openssl rand -hex 24)"
+          echo "$CERTIFICATE_P12" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+          security create-keychain -p "$password" "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security import "$RUNNER_TEMP/certificate.p12" -P "$CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$password" "$keychain"
+          security list-keychains -d user -s "$keychain" login.keychain-db
+      - name: Package universal macOS app
+        env:
+          RIFT_MACOS_UNIVERSAL: 1
+          RIFT_REQUIRE_UPDATE_SIGNING: 1
+          RIFT_VERSION: ${{ steps.version.outputs.version }}
+          RIFT_BUILD_NUMBER: ${{ steps.version.outputs.build }}
+          RIFT_CODESIGN_IDENTITY: Developer ID Application
+          SPARKLE_PUBLIC_ED_KEY: ${{ secrets.SPARKLE_PUBLIC_ED_KEY }}
+        run: scripts/package-macos.sh
+      - name: Notarize and staple
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          xcrun notarytool submit dist/macos/Rift-macOS.zip --apple-id "$APPLE_ID" \
+            --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD" --wait
+          xcrun stapler staple dist/macos/Rift.app
+          rm dist/macos/Rift-macOS.zip
+          ditto -c -k --sequesterRsrc --keepParent dist/macos/Rift.app dist/macos/Rift-macOS.zip
+      - name: Generate signed Sparkle appcast
+        env:
+          SPARKLE_PRIVATE_ED_KEY: ${{ secrets.SPARKLE_PRIVATE_ED_KEY }}
+        run: |
+          test -n "$SPARKLE_PRIVATE_ED_KEY"
+          curl --fail --location --retry 3 \
+            "https://github.com/sparkle-project/Sparkle/releases/download/${SPARKLE_VERSION}/Sparkle-${SPARKLE_VERSION}.tar.xz" \
+            -o "$RUNNER_TEMP/Sparkle.tar.xz"
+          tar -xf "$RUNNER_TEMP/Sparkle.tar.xz" -C "$RUNNER_TEMP"
+          printf '%s' "$SPARKLE_PRIVATE_ED_KEY" | "$RUNNER_TEMP/bin/generate_appcast" \
+            --ed-key-file - \
+            --download-url-prefix "https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_TAG}/" \
+            dist/macos
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-release
+          path: |
+            dist/macos/Rift-macOS.zip
+            dist/macos/appcast.xml
+          if-no-files-found: error
+
+  windows:
+    runs-on: windows-2025-vs2026
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - shell: pwsh
+        run: scripts/package-windows.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-release
+          path: dist/windows/*.zip
+          if-no-files-found: error
+
+  publish:
+    needs: [macos, windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: release
+          merge-multiple: true
+      - name: Refresh rolling prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+              --title "Rift Nightly" --prerelease --latest=false --notes "Automated build ${GITHUB_SHA}."
+          else
+            gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+              --title "Rift Nightly" --prerelease --notes "Automated build ${GITHUB_SHA}."
+          fi
+          gh release upload "$RELEASE_TAG" release/* --repo "$GITHUB_REPOSITORY" --clobber
