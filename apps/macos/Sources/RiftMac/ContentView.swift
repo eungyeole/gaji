@@ -65,6 +65,7 @@ private struct RepositoryTabBar: View {
         }
         .scrollIndicators(.hidden)
         .background(.bar)
+        .overlay(alignment: .bottom) { Divider() }
     }
 }
 
@@ -89,11 +90,7 @@ struct ContentView: View {
                         Divider()
                     }
                     NavigationSplitView(columnVisibility: $columnVisibility) {
-                        SidebarView {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                columnVisibility = .detailOnly
-                            }
-                        }
+                        SidebarView()
                             .navigationSplitViewColumnWidth(min: 210, ideal: 250, max: 320)
                     } detail: {
                         VStack(spacing: 0) {
@@ -112,24 +109,11 @@ struct ContentView: View {
                             }
                         }
                     }
-                    .toolbar(removing: .sidebarToggle)
-                    .animation(.easeInOut(duration: 0.2), value: columnVisibility)
                 }
             }
         }
         .navigationTitle(repository.title)
         .toolbar {
-            ToolbarItem(placement: .navigation) {
-                if columnVisibility != .all {
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            columnVisibility = .all
-                        }
-                    } label: {
-                        Label("Show Sidebar", systemImage: "sidebar.left")
-                    }
-                }
-            }
             ToolbarItemGroup {
                 Button(action: repository.refresh) {
                     Label("Refresh", systemImage: "arrow.trianglehead.2.clockwise.rotate.90")
@@ -602,24 +586,9 @@ private struct SidebarView: View {
     @Environment(WorkspaceStore.self) private var workspace
     @State private var selectedItem: String?
     @State private var hoveredItem: String?
-    let close: () -> Void
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                Text("Branches")
-                    .font(.headline)
-                Spacer()
-                Button(action: close) {
-                    Image(systemName: "sidebar.left")
-                        .frame(width: 22, height: 22)
-                }
-                .buttonStyle(.borderless)
-                .help("Hide Sidebar")
-            }
-            .padding(.leading, 16)
-            .padding(.trailing, 10)
-            .padding(.vertical, 10)
             List(selection: $selectedItem) {
                 Section {
                 ForEach(repository.branches, id: \.self) { branch in
