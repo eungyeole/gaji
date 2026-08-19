@@ -914,6 +914,13 @@ private struct CommitInspector: View {
         VStack(spacing: 0) {
             if let commit {
                 VStack(alignment: .leading, spacing: 6) {
+                    Button {
+                        repository.closeFileDetails()
+                        repository.selection = nil
+                    } label: {
+                        Label("Changes", systemImage: "chevron.left")
+                    }
+                    .buttonStyle(.borderless)
                     Text(commit.subject).font(.headline).lineLimit(2)
                     HStack(spacing: 6) {
                         Text(commit.author)
