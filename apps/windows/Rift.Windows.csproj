@@ -19,10 +19,11 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.3.1" />
   </ItemGroup>
-  <Target Name="BuildRiftNativeCore" BeforeTargets="Build" Condition="'$(DesignTimeBuild)' != 'true'">
+  <Target Name="BuildRiftNativeCore" BeforeTargets="Build"
+          Condition="'$(DesignTimeBuild)' != 'true' and '$(SkipRiftNativeBuild)' != 'true'">
     <Exec WorkingDirectory="$(MSBuildThisFileDirectory)..\.." Command="cargo build -p rift-ffi --release --target $(RiftRustTarget)" />
   </Target>
-  <Target Name="CopyRiftNativeCore" AfterTargets="Build">
+  <Target Name="CopyRiftNativeCore" AfterTargets="Build" Condition="'$(SkipRiftNativeBuild)' != 'true'">
     <Copy SourceFiles="$(RiftNativeLibrary)" DestinationFolder="$(OutDir)" />
   </Target>
 </Project>

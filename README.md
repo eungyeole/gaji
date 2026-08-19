@@ -21,11 +21,23 @@ keeps behavior compatible with users' authentication, hooks, filters, and Git
 configuration. We can move performance-sensitive read operations to `gitoxide`
 later without changing the platform interfaces.
 
-## Run the first vertical slice
+## Implemented workflows
+
+- Open, initialize, and clone repositories
+- Commit graph, history search, file diff, blame, tags, remotes, and worktrees
+- File and hunk stage/unstage, discard, commit, and amend engine support
+- Branch create/switch/rename/delete, merge, cherry-pick, revert, and reset
+- Rebase plus validated interactive pick/reword/edit/squash/fixup/drop plans
+- Fetch, pull, push, force-with-lease engine support, stash, and submodules
+- Conflict detection, continue/abort, ours/theirs, and 3-way merge content
+- Shared C ABI consumed directly by the SwiftUI and WinUI applications
+
+## Build and verify
 
 ```sh
 cargo run -p rift-cli -- /path/to/a/repository
 cargo test --workspace
+cargo clippy --workspace --all-targets -- -D warnings
 ```
 
 The CLI prints the repository root, current branch, working-tree changes, and
@@ -35,7 +47,9 @@ native applications will consume.
 ## Project layout
 
 - `crates/rift-core`: shared Git operations and domain models
+- `crates/rift-ffi`: static/dynamic C ABI for native applications
 - `crates/rift-cli`: executable development harness
-- `apps/macos`: SwiftUI/AppKit application (next milestone)
-- `apps/windows`: WinUI 3 application (next milestone)
+- `apps/macos`: macOS 26 SwiftUI/AppKit application with Liquid Glass
+- `apps/windows`: .NET 10 and Windows App SDK 2.3 WinUI 3 application
+- `scripts`: reproducible macOS and Windows release packaging
 - `docs`: product and architecture decisions

@@ -71,6 +71,30 @@ enum Request {
         start: String,
         switch: bool,
     },
+    AddRemote {
+        path: String,
+        name: String,
+        url: String,
+    },
+    RemoveRemote {
+        path: String,
+        name: String,
+    },
+    CreateTag {
+        path: String,
+        name: String,
+        target: String,
+        message: Option<String>,
+    },
+    DeleteTag {
+        path: String,
+        name: String,
+    },
+    PushTag {
+        path: String,
+        remote: String,
+        name: String,
+    },
     Fetch {
         path: String,
         remote: String,
@@ -314,6 +338,16 @@ fn execute(request: Request) -> Result<(), String> {
             start,
             switch,
         } => rift_core::create_branch(path, &name, &start, switch),
+        Request::AddRemote { path, name, url } => rift_core::add_remote(path, &name, &url),
+        Request::RemoveRemote { path, name } => rift_core::remove_remote(path, &name),
+        Request::CreateTag {
+            path,
+            name,
+            target,
+            message,
+        } => rift_core::create_tag(path, &name, &target, message.as_deref()),
+        Request::DeleteTag { path, name } => rift_core::delete_tag(path, &name),
+        Request::PushTag { path, remote, name } => rift_core::push_tag(path, &remote, &name),
         Request::Fetch {
             path,
             remote,

@@ -48,7 +48,7 @@ public sealed partial class MainWindow : Window
         ViewModel.Clone(urlBox.Text.Trim(), Path.Combine(parent.Path, name));
     }
 
-    private async Task<Windows.Storage.StorageFolder?> PickFolder(string title)
+    private async Task<global::Windows.Storage.StorageFolder?> PickFolder(string title)
     {
         var picker = new FolderPicker { SuggestedStartLocation = PickerLocationId.ComputerFolder };
         picker.FileTypeFilter.Add("*");
@@ -66,6 +66,33 @@ public sealed partial class MainWindow : Window
     private void Abort_Click(object sender, RoutedEventArgs e) => ViewModel.AbortOperation();
     private void UseCurrent_Click(object sender, RoutedEventArgs e) => ViewModel.ResolveSelected("--ours");
     private void UseIncoming_Click(object sender, RoutedEventArgs e) => ViewModel.ResolveSelected("--theirs");
+
+    private async void CreateTag_Click(object sender, RoutedEventArgs e)
+    {
+        var name = new TextBox { PlaceholderText = "v1.0.0" };
+        var dialog = new ContentDialog {
+            XamlRoot = Content.XamlRoot, Title = "Create Tag", Content = name,
+            PrimaryButtonText = "Create", CloseButtonText = "Cancel"
+        };
+        if (await dialog.ShowAsync() == ContentDialogResult.Primary && !string.IsNullOrWhiteSpace(name.Text))
+            ViewModel.CreateTag(name.Text.Trim());
+    }
+
+    private async void AddRemote_Click(object sender, RoutedEventArgs e)
+    {
+        var name = new TextBox { Header = "Name", Text = "origin" };
+        var url = new TextBox { Header = "URL", PlaceholderText = "https://github.com/owner/repository.git" };
+        var fields = new StackPanel { Spacing = 12 };
+        fields.Children.Add(name);
+        fields.Children.Add(url);
+        var dialog = new ContentDialog {
+            XamlRoot = Content.XamlRoot, Title = "Add Remote", Content = fields,
+            PrimaryButtonText = "Add", CloseButtonText = "Cancel"
+        };
+        if (await dialog.ShowAsync() == ContentDialogResult.Primary &&
+            !string.IsNullOrWhiteSpace(name.Text) && !string.IsNullOrWhiteSpace(url.Text))
+            ViewModel.AddRemote(name.Text.Trim(), url.Text.Trim());
+    }
     private void Commit_Click(object sender, RoutedEventArgs e) => ViewModel.Commit();
 
     private void Commit_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -83,4 +110,7 @@ public sealed partial class MainWindow : Window
         if ((sender as ComboBox)?.SelectedItem is string branch && branch != ViewModel.Branch)
             ViewModel.SwitchBranch(branch);
     }
+
+    private void Search_TextChanged(AutoSuggestBox sender, AutoSuggestBoxTextChangedEventArgs args) =>
+        ViewModel.FilterCommits(sender.Text);
 }

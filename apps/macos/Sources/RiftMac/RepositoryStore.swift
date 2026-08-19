@@ -49,6 +49,7 @@ final class RepositoryStore {
     private(set) var branches: [String] = []
     private(set) var remotes: [String] = []
     private(set) var stashes: [String] = []
+    private(set) var tags: [String] = []
     private(set) var operation: GitOperation?
     private(set) var conflicts: [String] = []
     var errorMessage: String?
@@ -72,6 +73,12 @@ final class RepositoryStore {
     var rebaseUpstream = ""
     var rebaseSteps: [CoreRebaseStep] = []
     var showsInteractiveRebase = false
+    var showsAddRemote = false
+    var newRemoteName = "origin"
+    var newRemoteURL = ""
+    var taggingCommit: Commit?
+    var newTagName = ""
+    var searchText = ""
 
     var title: String { root?.lastPathComponent ?? "Rift" }
 
@@ -171,6 +178,7 @@ final class RepositoryStore {
             remotes = try git(at: root, "remote").split(separator: "\n").map(String.init)
             stashes = try git(at: root, "stash", "list", "--format=%gd %s")
                 .split(separator: "\n").map(String.init)
+            tags = try git(at: root, "tag", "--list").split(separator: "\n").map(String.init)
             let state = try CoreBridge.operationState(root.path())
             operation = switch state.operation {
             case "cherryPick": .cherryPick
@@ -270,6 +278,39 @@ final class RepositoryStore {
         ])
     }
 
+    func addRemote() {
+        let name = newRemoteName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let url = newRemoteURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty, !url.isEmpty else { return }
+        showsAddRemote = false
+        runCore(["action": "addRemote", "path": rootPath, "name": name, "url": url])
+    }
+
+    func removeRemote(_ name: String) {
+        runCore(["action": "removeRemote", "path": rootPath, "name": name])
+    }
+
+    func createTag() {
+        guard let commit = taggingCommit else { return }
+        let name = newTagName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return }
+        taggingCommit = nil
+        runCore([
+            "action": "createTag", "path": rootPath, "name": name,
+            "target": commit.id
+        ])
+        newTagName = ""
+    }
+
+    func deleteTag(_ name: String) {
+        runCore(["action": "deleteTag", "path": rootPath, "name": name])
+    }
+
+    func pushTag(_ name: String) {
+        guard let remote = remotes.first else { return }
+        runCore(["action": "pushTag", "path": rootPath, "remote": remote, "name": name])
+    }
+
     func createBranch() {
         let name = newBranchName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { return }
@@ -282,6 +323,9 @@ final class RepositoryStore {
 
     func fetch() {
         guard let remote = remotes.first else { return }
+        fetch(remote)
+    }
+    func fetch(_ remote: String) {
         runCore(["action": "fetch", "path": rootPath, "remote": remote, "prune": true])
     }
     func pull() { runCore(["action": "pull", "path": rootPath, "rebase": true]) }

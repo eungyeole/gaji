@@ -1,0 +1,39 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v10.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v10.0": {
+      "Rift.Windows.Logic.Verify/1.0.0": {
+        "dependencies": {
+          "Rift.Windows.Logic": "1.0.0"
+        },
+        "runtime": {
+          "Rift.Windows.Logic.Verify.dll": {}
+        }
+      },
+      "Rift.Windows.Logic/1.0.0": {
+        "runtime": {
+          "Rift.Windows.Logic.dll": {
+            "assemblyVersion": "1.0.0.0",
+            "fileVersion": "1.0.0.0"
+          }
+        }
+      }
+    }
+  },
+  "libraries": {
+    "Rift.Windows.Logic.Verify/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    },
+    "Rift.Windows.Logic/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}

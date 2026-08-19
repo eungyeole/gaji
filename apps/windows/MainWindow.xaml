@@ -17,9 +17,13 @@
 
         <CommandBar Grid.Row="0" DefaultLabelPosition="Right">
             <CommandBar.Content>
-                <ComboBox Width="190" Margin="8,0" Header="Branch"
-                          ItemsSource="{x:Bind ViewModel.Branches}" SelectedItem="{x:Bind ViewModel.Branch, Mode=OneWay}"
-                          SelectionChanged="Branch_SelectionChanged" />
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <ComboBox Width="190" Margin="8,0" Header="Branch"
+                              ItemsSource="{x:Bind ViewModel.Branches}" SelectedItem="{x:Bind ViewModel.Branch, Mode=OneWay}"
+                              SelectionChanged="Branch_SelectionChanged" />
+                    <AutoSuggestBox Width="240" PlaceholderText="Search commits"
+                                    TextChanged="Search_TextChanged" />
+                </StackPanel>
             </CommandBar.Content>
             <AppBarButton Icon="OpenFile" Label="Open" Click="OpenRepository_Click" />
             <AppBarButton Icon="Add" Label="New" Click="NewRepository_Click" />
@@ -36,6 +40,9 @@
             <AppBarButton Icon="Play" Label="Continue" Click="Continue_Click" IsEnabled="{x:Bind ViewModel.HasOperation, Mode=OneWay}" />
             <AppBarButton Icon="Cancel" Label="Abort" Click="Abort_Click" IsEnabled="{x:Bind ViewModel.HasOperation, Mode=OneWay}" />
             <AppBarSeparator />
+            <AppBarButton Icon="Tag" Label="Create Tag" Click="CreateTag_Click" IsEnabled="{x:Bind ViewModel.HasSelectedCommit, Mode=OneWay}" />
+            <AppBarButton Icon="World" Label="Add Remote" Click="AddRemote_Click" />
+            <AppBarSeparator />
             <AppBarButton Label="Use Current" Click="UseCurrent_Click" IsEnabled="{x:Bind ViewModel.HasSelectedConflict, Mode=OneWay}" />
             <AppBarButton Label="Use Incoming" Click="UseIncoming_Click" IsEnabled="{x:Bind ViewModel.HasSelectedConflict, Mode=OneWay}" />
         </CommandBar>
@@ -51,7 +58,11 @@
             </NavigationView.PaneHeader>
             <NavigationView.MenuItems>
                 <NavigationViewItem Content="History" Icon="Clock" />
-                <NavigationViewItem Content="Changes" Icon="Edit" InfoBadge="{x:Bind ViewModel.ChangeBadge}" />
+                <NavigationViewItem Content="Changes" Icon="Edit">
+                    <NavigationViewItem.InfoBadge>
+                        <InfoBadge Value="{x:Bind ViewModel.ChangeCount, Mode=OneWay}" />
+                    </NavigationViewItem.InfoBadge>
+                </NavigationViewItem>
             </NavigationView.MenuItems>
             <NavigationView.Content>
                 <Grid>
@@ -107,7 +118,8 @@
                         <TextBlock Text="{x:Bind ViewModel.DetailTitle, Mode=OneWay}" FontSize="24" FontWeight="SemiBold" />
                         <TextBox Grid.Row="1" Margin="0,16,0,0" Text="{x:Bind ViewModel.DetailText, Mode=OneWay}"
                                  FontFamily="Consolas" IsReadOnly="True" AcceptsReturn="True"
-                                 HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" />
+                                 ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                                 ScrollViewer.VerticalScrollBarVisibility="Auto" />
                     </Grid>
                 </Grid>
             </NavigationView.Content>

@@ -15,18 +15,22 @@ public sealed class RepositoryViewModel : INotifyPropertyChanged
     private string commitMessage = "";
     private string? operation;
     private FileChangeItem? selectedChange;
+    private CommitItem? selectedCommit;
+    private readonly List<CommitItem> allCommits = [];
 
     public ObservableCollection<CommitItem> Commits { get; } = [];
     public ObservableCollection<FileChangeItem> Changes { get; } = [];
     public ObservableCollection<string> Branches { get; } = [];
+    public ObservableCollection<string> Tags { get; } = [];
     public string RepositoryName { get => repositoryName; private set => Set(ref repositoryName, value); }
     public string Branch { get => branch; private set => Set(ref branch, value); }
     public string DetailTitle { get => detailTitle; private set => Set(ref detailTitle, value); }
     public string DetailText { get => detailText; private set => Set(ref detailText, value); }
     public string CommitMessage { get => commitMessage; set => Set(ref commitMessage, value); }
-    public Microsoft.UI.Xaml.Controls.InfoBadge ChangeBadge => new() { Value = Changes.Count };
+    public int ChangeCount => Changes.Count;
     public bool HasOperation => operation is not null;
     public bool HasSelectedConflict => selectedChange?.IsConflict == true;
+    public bool HasSelectedCommit => selectedCommit is not null;
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -59,6 +63,9 @@ public sealed class RepositoryViewModel : INotifyPropertyChanged
             Branches.Clear();
             foreach (var name in Git(root, "branch", "--format=%(refname:short)").Split('\n', StringSplitOptions.RemoveEmptyEntries))
                 Branches.Add(name);
+            Tags.Clear();
+            foreach (var tag in Git(root, "tag", "--list").Split('\n', StringSplitOptions.RemoveEmptyEntries))
+                Tags.Add(tag);
             operation = DetectOperation(root);
             OnPropertyChanged(nameof(HasOperation));
             Changes.Clear();
@@ -69,9 +76,11 @@ public sealed class RepositoryViewModel : INotifyPropertyChanged
                     change.Path));
 
             Commits.Clear();
+            allCommits.Clear();
             foreach (var commit in NativeCore.Graph(root))
-                Commits.Add(new(commit.Id, commit.Author, commit.Subject, commit.Parents, commit.References));
-            OnPropertyChanged(nameof(ChangeBadge));
+                allCommits.Add(new(commit.Id, commit.Author, commit.Subject, commit.Parents, commit.References));
+            foreach (var commit in allCommits) Commits.Add(commit);
+            OnPropertyChanged(nameof(ChangeCount));
         }
         catch (Exception error)
         {
@@ -83,6 +92,8 @@ public sealed class RepositoryViewModel : INotifyPropertyChanged
     public void Select(CommitItem commit)
     {
         if (root is null) return;
+        selectedCommit = commit;
+        OnPropertyChanged(nameof(HasSelectedCommit));
         DetailTitle = commit.Subject;
         DetailText = TryGit(root, "show", "--stat", "--patch", "--no-ext-diff", commit.Id);
     }
@@ -181,6 +192,28 @@ public sealed class RepositoryViewModel : INotifyPropertyChanged
             action = "push", path = root, remote, branch = Branch,
             setUpstream = false, forceWithLease = false
         });
+    }
+
+    public void CreateTag(string name)
+    {
+        if (root is null || selectedCommit is null) return;
+        RunNative(new { action = "createTag", path = root, name, target = selectedCommit.Id });
+    }
+
+    public void AddRemote(string name, string url)
+    {
+        if (root is not null) RunNative(new { action = "addRemote", path = root, name, url });
+    }
+
+    public void FilterCommits(string query)
+    {
+        var normalized = query.Trim();
+        var matches = normalized.Length == 0 ? allCommits : allCommits.Where(commit =>
+            commit.Subject.Contains(normalized, StringComparison.OrdinalIgnoreCase) ||
+            commit.Author.Contains(normalized, StringComparison.OrdinalIgnoreCase) ||
+            commit.Id.Contains(normalized, StringComparison.OrdinalIgnoreCase));
+        Commits.Clear();
+        foreach (var commit in matches) Commits.Add(commit);
     }
 
     private string? FirstRemote() => root is null

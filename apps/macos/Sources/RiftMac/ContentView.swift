@@ -184,6 +184,49 @@ struct ContentView: View {
             .padding(24)
             .frame(minWidth: 720, minHeight: 560)
         }
+        .sheet(isPresented: $repository.showsAddRemote) {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Add Remote").font(.title2.bold())
+                TextField("Name", text: $repository.newRemoteName)
+                    .textFieldStyle(.roundedBorder)
+                TextField("URL", text: $repository.newRemoteURL)
+                    .textFieldStyle(.roundedBorder)
+                HStack {
+                    Spacer()
+                    Button("Cancel") { repository.showsAddRemote = false }
+                    Button("Add", action: repository.addRemote)
+                        .buttonStyle(.glassProminent)
+                        .disabled(
+                            repository.newRemoteName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+                            repository.newRemoteURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        )
+                }
+            }
+            .padding(24)
+            .frame(width: 480)
+        }
+        .sheet(isPresented: Binding(
+            get: { repository.taggingCommit != nil },
+            set: { if !$0 { repository.taggingCommit = nil } }
+        )) {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Create Tag").font(.title2.bold())
+                Text(repository.taggingCommit?.subject ?? "")
+                    .foregroundStyle(.secondary)
+                TextField("Tag name", text: $repository.newTagName)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit(repository.createTag)
+                HStack {
+                    Spacer()
+                    Button("Cancel") { repository.taggingCommit = nil }
+                    Button("Create", action: repository.createTag)
+                        .buttonStyle(.glassProminent)
+                        .disabled(repository.newTagName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+            .padding(24)
+            .frame(width: 440)
+        }
         .sheet(isPresented: Binding(
             get: { repository.conflictFile != nil },
             set: { if !$0 { repository.conflictFile = nil } }
@@ -376,6 +419,25 @@ private struct SidebarView: View {
                         }
                     }
                 }
+                Section("Remotes") {
+                    ForEach(repository.remotes, id: \.self) { remote in
+                        Label(remote, systemImage: "network")
+                            .contextMenu {
+                                Button("Fetch") { repository.fetch(remote) }
+                                Button("Remove", role: .destructive) { repository.removeRemote(remote) }
+                            }
+                    }
+                    Button("Add Remote…") { repository.showsAddRemote = true }
+                }
+                Section("Tags") {
+                    ForEach(repository.tags, id: \.self) { tag in
+                        Label(tag, systemImage: "tag")
+                            .contextMenu {
+                                Button("Push Tag") { repository.pushTag(tag) }
+                                Button("Delete", role: .destructive) { repository.deleteTag(tag) }
+                            }
+                    }
+                }
             }
             .listStyle(.sidebar)
             Divider()
@@ -465,8 +527,20 @@ private struct CommitList: View {
     @Environment(RepositoryStore.self) private var repository
     @Binding var selection: Commit.ID?
 
+    private var visibleCommits: [Commit] {
+        let query = repository.searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return repository.commits }
+        return repository.commits.filter {
+            $0.subject.localizedCaseInsensitiveContains(query) ||
+            $0.author.localizedCaseInsensitiveContains(query) ||
+            $0.id.localizedCaseInsensitiveContains(query)
+        }
+    }
+
     var body: some View {
-        List(repository.commits, selection: $selection) { commit in
+        @Bindable var repository = repository
+
+        List(visibleCommits, selection: $selection) { commit in
             HStack(alignment: .top, spacing: 10) {
                 VStack(spacing: 0) {
                     Rectangle().fill(.blue.opacity(0.45)).frame(width: 2, height: 8)
@@ -498,6 +572,7 @@ private struct CommitList: View {
                 .disabled(repository.operation != nil)
                 Button("Revert Commit") { repository.revert(commit) }
                     .disabled(repository.operation != nil)
+                Button("Create Tag…") { repository.taggingCommit = commit }
                 Menu("Reset Current Branch") {
                     Button("Soft") { repository.reset(to: commit, mode: "--soft") }
                     Button("Mixed") { repository.reset(to: commit, mode: "--mixed") }
@@ -509,6 +584,7 @@ private struct CommitList: View {
                 }
             }
         }
+        .searchable(text: $repository.searchText, prompt: "Search commits")
         .overlay {
             if repository.commits.isEmpty {
                 ContentUnavailableView("No Commits", systemImage: "clock",
