@@ -5,13 +5,9 @@ struct WorkspaceView: View {
     @Environment(WorkspaceStore.self) private var workspace
 
     var body: some View {
-        VStack(spacing: 0) {
-            RepositoryTabBar()
-            Divider()
-            ContentView()
-                .environment(workspace.selectedRepository)
-                .id(workspace.selectedTabID)
-        }
+        ContentView()
+            .environment(workspace.selectedRepository)
+            .id(workspace.selectedTabID)
     }
 }
 
@@ -82,7 +78,10 @@ struct ContentView: View {
 
         Group {
             if repository.root == nil {
-                WelcomeView()
+                VStack(spacing: 0) {
+                    RepositoryTabBar()
+                    WelcomeView()
+                }
             } else {
                 VStack(spacing: 0) {
                     if repository.operation != nil {
@@ -90,21 +89,31 @@ struct ContentView: View {
                         Divider()
                     }
                     NavigationSplitView(columnVisibility: $columnVisibility) {
-                        SidebarView { columnVisibility = .doubleColumn }
-                            .navigationSplitViewColumnWidth(min: 210, ideal: 250, max: 320)
-                    } content: {
-                        Group {
-                            if repository.selectedFile != nil {
-                                FileDiffView()
-                            } else {
-                                CommitList(selection: $repository.selection)
+                        SidebarView {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                columnVisibility = .detailOnly
                             }
                         }
-                        .navigationSplitViewColumnWidth(min: 420, ideal: 620)
+                            .navigationSplitViewColumnWidth(min: 210, ideal: 250, max: 320)
                     } detail: {
-                        WorkingCopyInspector()
-                            .navigationSplitViewColumnWidth(min: 300, ideal: 360, max: 480)
+                        VStack(spacing: 0) {
+                            RepositoryTabBar()
+                            HSplitView {
+                                Group {
+                                    if repository.selectedFile != nil {
+                                        FileDiffView()
+                                    } else {
+                                        CommitList(selection: $repository.selection)
+                                    }
+                                }
+                                .frame(minWidth: 420, maxWidth: .infinity)
+                                WorkingCopyInspector()
+                                    .frame(minWidth: 300, idealWidth: 360, maxWidth: 480)
+                            }
+                        }
                     }
+                    .toolbar(removing: .sidebarToggle)
+                    .animation(.easeInOut(duration: 0.2), value: columnVisibility)
                 }
             }
         }
@@ -113,7 +122,9 @@ struct ContentView: View {
             ToolbarItem(placement: .navigation) {
                 if columnVisibility != .all {
                     Button {
-                        columnVisibility = .all
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            columnVisibility = .all
+                        }
                     } label: {
                         Label("Show Sidebar", systemImage: "sidebar.left")
                     }
@@ -159,7 +170,6 @@ struct ContentView: View {
                 .disabled(repository.root == nil)
             }
         }
-        .toolbar(removing: .sidebarToggle)
         .sheet(isPresented: $repository.showsCreateBranch) {
             VStack(alignment: .leading, spacing: 16) {
                 Text("Create Branch").font(.title2.bold())
@@ -610,8 +620,6 @@ private struct SidebarView: View {
             .padding(.leading, 16)
             .padding(.trailing, 10)
             .padding(.vertical, 10)
-            Divider()
-
             List(selection: $selectedItem) {
                 Section {
                 ForEach(repository.branches, id: \.self) { branch in
@@ -795,7 +803,6 @@ private struct WorkingCopyInspector: View {
             .padding(.horizontal, 14)
             .frame(height: 42)
             .background(.bar)
-            Divider()
 
             VSplitView {
                 ChangeBucket(staged: false)
@@ -804,7 +811,6 @@ private struct WorkingCopyInspector: View {
                     .frame(minHeight: 150, maxHeight: .infinity)
             }
             .frame(maxHeight: .infinity)
-            Divider()
 
             VStack(alignment: .leading, spacing: 9) {
                 HStack {
@@ -867,7 +873,6 @@ private struct ChangeBucket: View {
             .padding(.horizontal, 12)
             .frame(height: 36)
             .background(.bar)
-            Divider()
             if changes.isEmpty {
                 Text(staged ? "No staged files" : "No unstaged files")
                     .font(.callout)
@@ -899,6 +904,7 @@ private struct ChangeBucket: View {
                         .buttonStyle(.borderless)
                         .help(staged ? "Unstage file" : "Stage file")
                     }
+                    .listRowSeparator(.hidden)
                     .contextMenu {
                         Button(staged ? "Unstage File" : "Stage File") {
                             staged ? repository.unstage(change.path) : repository.stage(change.path)
@@ -1039,6 +1045,7 @@ private struct CommitList: View {
                 }
             }
             .padding(.vertical, 3)
+            .listRowSeparator(.hidden)
             .contextMenu {
                 Button("Cherry-Pick \(String(commit.id.prefix(8)))") {
                     repository.cherryPick(commit)
