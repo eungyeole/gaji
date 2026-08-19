@@ -106,38 +106,17 @@ private struct RepositoryTabBar: View {
         .background(.bar)
         .overlay(alignment: .bottom) {
             if workspace.selectedRepository.isBusy {
-                OperationGradientLine().transition(.opacity)
+                ProgressView()
+                    .progressViewStyle(.linear)
+                    .controlSize(.mini)
+                    .tint(Color.accentColor.opacity(0.7))
+                    .accessibilityLabel(Text(workspace.selectedRepository.busyMessage ?? "Working"))
+                    .transition(.opacity)
             } else {
                 Divider()
             }
         }
         .animation(.easeInOut(duration: 0.2), value: workspace.selectedRepository.isBusy)
-    }
-}
-
-private struct OperationGradientLine: View {
-    @State private var intensity = 0.28
-
-    var body: some View {
-        LinearGradient(
-            colors: [
-                Color.accentColor.opacity(0.02),
-                Color.accentColor.opacity(0.16),
-                Color.accentColor.opacity(0.08),
-                Color.accentColor.opacity(0.02)
-            ],
-            startPoint: .leading,
-            endPoint: .trailing
-        )
-        .opacity(intensity)
-        .frame(height: 1.5)
-        .drawingGroup(opaque: false, colorMode: .linear)
-        .allowsHitTesting(false)
-        .onAppear {
-            withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
-                intensity = 0.72
-            }
-        }
     }
 }
 
@@ -1537,11 +1516,59 @@ private struct CommitReferences: View {
     }
 }
 
+private struct GitHubCommitIdentity: Decodable, Sendable {
+    struct Author: Decodable, Sendable {
+        let avatarURL: URL
+    }
+
+    let sha: String
+    let author: Author?
+}
+
+private actor GitHubAvatarResolver {
+    static let shared = GitHubAvatarResolver()
+    private var cache: [String: [String: URL]] = [:]
+    private var requests: [String: Task<[String: URL], Never>] = [:]
+
+    func avatarURL(repository: String, commit: String) async -> URL? {
+        if let avatars = cache[repository] { return avatars[commit] }
+        if let request = requests[repository] { return (await request.value)[commit] }
+
+        let request = Task<[String: URL], Never> {
+            guard let url = URL(string: "https://api.github.com/repos/\(repository)/commits?per_page=100") else {
+                return [:]
+            }
+            var request = URLRequest(url: url, timeoutInterval: 8)
+            request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+            request.setValue("2022-11-28", forHTTPHeaderField: "X-GitHub-Api-Version")
+            do {
+                let (data, response) = try await URLSession.shared.data(for: request)
+                guard (response as? HTTPURLResponse)?.statusCode == 200 else { return [:] }
+                let decoder = JSONDecoder()
+                decoder.keyDecodingStrategy = .convertFromSnakeCase
+                let commits = try decoder.decode([GitHubCommitIdentity].self, from: data)
+                return Dictionary(uniqueKeysWithValues: commits.compactMap { commit in
+                    commit.author.map { (commit.sha, $0.avatarURL) }
+                })
+            } catch {
+                return [:]
+            }
+        }
+        requests[repository] = request
+        let avatars = await request.value
+        requests[repository] = nil
+        cache[repository] = avatars
+        return avatars[commit]
+    }
+}
+
 private struct CommitAvatar: View {
+    @Environment(RepositoryStore.self) private var repository
     let commit: Commit
+    @State private var resolvedAvatarURL: URL?
 
     var body: some View {
-        AsyncImage(url: avatarURL) { phase in
+        AsyncImage(url: resolvedAvatarURL ?? fallbackAvatarURL) { phase in
             if case let .success(image) = phase {
                 image
                     .resizable()
@@ -1561,18 +1588,32 @@ private struct CommitAvatar: View {
             }
         }
         .frame(width: 18, height: 18)
+        .task(id: "\(repository.githubRepository ?? ""):\(commit.id)") {
+            resolvedAvatarURL = nil
+            guard githubNoreplyAvatarURL == nil, let slug = repository.githubRepository else { return }
+            resolvedAvatarURL = await GitHubAvatarResolver.shared.avatarURL(
+                repository: slug,
+                commit: commit.id
+            )
+        }
     }
 
-    private var avatarURL: URL? {
+    private var fallbackAvatarURL: URL? {
+        if let githubNoreplyAvatarURL { return githubNoreplyAvatarURL }
         let email = commit.authorEmail.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !email.isEmpty else { return nil }
+        let digest = Insecure.MD5.hash(data: Data(email.utf8)).map { String(format: "%02x", $0) }.joined()
+        return URL(string: "https://www.gravatar.com/avatar/\(digest)?d=404&s=48")
+    }
+
+    private var githubNoreplyAvatarURL: URL? {
+        let email = commit.authorEmail.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         if email.hasSuffix("@users.noreply.github.com") {
             let local = email.split(separator: "@", maxSplits: 1).first.map(String.init) ?? ""
             let username = local.split(separator: "+").last.map(String.init) ?? local
             if !username.isEmpty { return URL(string: "https://github.com/\(username).png?size=48") }
         }
-        let digest = Insecure.MD5.hash(data: Data(email.utf8)).map { String(format: "%02x", $0) }.joined()
-        return URL(string: "https://www.gravatar.com/avatar/\(digest)?d=404&s=48")
+        return nil
     }
 }
 

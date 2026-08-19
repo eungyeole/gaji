@@ -61,6 +61,8 @@ final class RepositoryStore {
     @ObservationIgnored private var fileLoadTask: Task<Void, Never>?
     @ObservationIgnored private var commitLoadTask: Task<Void, Never>?
     @ObservationIgnored private var operationTask: Task<Void, Never>?
+    @ObservationIgnored private var workingFileCache: [String: LoadedFileDetails] = [:]
+    @ObservationIgnored private var commitFileCache: [String: String] = [:]
     private(set) var root: URL?
     private(set) var branch = ""
     private(set) var changes: [FileChange] = []
@@ -68,6 +70,7 @@ final class RepositoryStore {
     private(set) var branches: [String] = []
     private(set) var remoteBranches: [String] = []
     private(set) var remotes: [String] = []
+    private(set) var githubRepository: String?
     private(set) var stashes: [CoreStash] = []
     private(set) var tags: [String] = []
     private(set) var operation: GitOperation?
@@ -159,6 +162,8 @@ final class RepositoryStore {
         do {
             let snapshot = try CoreBridge.inspect(url.path())
             root = URL(fileURLWithPath: snapshot.root)
+            workingFileCache.removeAll()
+            commitFileCache.removeAll()
             UserDefaults.standard.set(snapshot.root, forKey: "lastRepository")
             recentRepositories.removeAll { $0 == snapshot.root }
             recentRepositories.insert(snapshot.root, at: 0)
@@ -217,6 +222,7 @@ final class RepositoryStore {
 
     func refresh() {
         guard let root else { return }
+        workingFileCache.removeAll()
         do {
             let snapshot = try CoreBridge.inspect(root.path())
             branch = snapshot.branch
@@ -242,6 +248,10 @@ final class RepositoryStore {
                 .map(String.init)
                 .filter { !$0.hasSuffix("/HEAD") }
             remotes = try git(at: root, "remote").split(separator: "\n").map(String.init)
+            let remote = remotes.contains("origin") ? "origin" : remotes.first
+            githubRepository = remote
+                .flatMap { try? git(at: root, "remote", "get-url", $0) }
+                .flatMap(Self.githubRepository(from:))
             stashes = (try? CoreBridge.stashes(root.path())) ?? []
             tags = try git(at: root, "tag", "--list").split(separator: "\n").map(String.init)
             worktrees = (try? CoreBridge.worktrees(root.path())) ?? []
@@ -281,11 +291,18 @@ final class RepositoryStore {
         selection = nil
         let inspectStaged = staged ?? (change.indexStatus != " " && change.indexStatus != "?")
         selectedFileIsStaged = inspectStaged
+        let rootPath = root.path()
+        let file = change.path
+        let cacheKey = "\(rootPath):\(inspectStaged):\(file)"
+        if let details = workingFileCache[cacheKey] {
+            selectedFileDiff = details.diff
+            selectedHunks = details.hunks
+            selectedFileIsLoading = false
+            return
+        }
         selectedFileIsLoading = true
         selectedFileDiff = ""
         selectedHunks = []
-        let rootPath = root.path()
-        let file = change.path
         fileLoadTask = Task { [weak self] in
             let details = await Task.detached(priority: .userInitiated) {
                 Self.loadFileDetails(rootPath: rootPath, file: file, staged: inspectStaged)
@@ -294,6 +311,7 @@ final class RepositoryStore {
                   let self,
                   self.selectedFile == file,
                   self.selectedFileIsStaged == inspectStaged else { return }
+            self.workingFileCache[cacheKey] = details
             self.selectedFileDiff = details.diff
             self.selectedHunks = details.hunks
             self.selectedFileIsLoading = false
@@ -326,10 +344,17 @@ final class RepositoryStore {
         fileLoadTask?.cancel()
         selectedFile = change.path
         selectedFileCommit = commit
+        let rootPath = root.path()
+        let cacheKey = "\(rootPath):\(commit):\(change.path)"
+        if let diff = commitFileCache[cacheKey] {
+            selectedFileDiff = diff
+            selectedHunks = []
+            selectedFileIsLoading = false
+            return
+        }
         selectedFileDiff = ""
         selectedHunks = []
         selectedFileIsLoading = true
-        let rootPath = root.path()
         fileLoadTask = Task { [weak self] in
             let result = await Task.detached(priority: .userInitiated) {
                 Result { try CoreBridge.commitFileDiff(rootPath, commit: commit, file: change.path) }
@@ -339,7 +364,9 @@ final class RepositoryStore {
                   self.selectedFile == change.path,
                   self.selectedFileCommit == commit else { return }
             switch result {
-            case let .success(diff): self.selectedFileDiff = diff
+            case let .success(diff):
+                self.commitFileCache[cacheKey] = diff
+                self.selectedFileDiff = diff
             case let .failure(error): self.errorMessage = error.localizedDescription
             }
             self.selectedFileIsLoading = false
@@ -760,6 +787,15 @@ final class RepositoryStore {
             throw GitError.failed(message.isEmpty ? "Git command failed" : message)
         }
         return String(decoding: stdout.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+    }
+
+    private nonisolated static func githubRepository(from remote: String) -> String? {
+        let normalized = remote.trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "git@github.com:", with: "https://github.com/")
+        guard let url = URL(string: normalized), url.host?.lowercased() == "github.com" else { return nil }
+        let parts = url.path.split(separator: "/").map(String.init)
+        guard parts.count >= 2 else { return nil }
+        return "\(parts[0])/\(parts[1].replacingOccurrences(of: ".git", with: ""))"
     }
 
 }
