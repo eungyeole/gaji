@@ -164,6 +164,13 @@ fn reads_history_blame_and_manages_worktrees() {
     let graph = rift_core::commit_graph(repository.path(), 100).unwrap();
     assert_eq!(graph.len(), 2);
     assert_eq!(graph[0].parents, [graph[1].id.clone()]);
+    let files = rift_core::commit_files(repository.path(), &graph[0].id).unwrap();
+    assert_eq!(files[0].path, "hello.txt");
+    assert!(
+        rift_core::commit_file_diff(repository.path(), &graph[0].id, "hello.txt")
+            .unwrap()
+            .contains("+second")
+    );
     let blame = rift_core::blame(repository.path(), "hello.txt").unwrap();
     assert_eq!(blame.len(), 2);
     assert_eq!(blame[1].content, "second");

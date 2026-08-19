@@ -45,6 +45,7 @@ enum GitOperation: String {
 @Observable
 final class RepositoryStore {
     @ObservationIgnored private var fileLoadTask: Task<Void, Never>?
+    @ObservationIgnored private var commitLoadTask: Task<Void, Never>?
     private(set) var root: URL?
     private(set) var branch = ""
     private(set) var changes: [FileChange] = []
@@ -59,10 +60,13 @@ final class RepositoryStore {
     var errorMessage: String?
     var selection: Commit.ID?
     var selectedFile: String?
+    var selectedFileCommit: String?
     var selectedFileDiff = ""
     var selectedHunks: [CoreDiffHunk] = []
     var selectedFileIsStaged = false
     var selectedFileIsLoading = false
+    private(set) var selectedCommitFiles: [CoreCommitFileChange] = []
+    private(set) var selectedCommitFilesLoading = false
     var commitMessage = ""
     var commitAmend = false
     var commitSign = false
@@ -239,7 +243,7 @@ final class RepositoryStore {
             default: nil
             }
             conflicts = state.conflicts
-            if let selectedFile, !changes.contains(where: { $0.path == selectedFile }) {
+            if selectedFileCommit == nil, let selectedFile, !changes.contains(where: { $0.path == selectedFile }) {
                 closeFileDetails()
             }
             if let selection, !commits.contains(where: { $0.id == selection }) {
@@ -261,6 +265,7 @@ final class RepositoryStore {
         guard let root else { return }
         fileLoadTask?.cancel()
         selectedFile = change.path
+        selectedFileCommit = nil
         selection = nil
         let inspectStaged = staged ?? (change.indexStatus != " " && change.indexStatus != "?")
         selectedFileIsStaged = inspectStaged
@@ -283,9 +288,56 @@ final class RepositoryStore {
         }
     }
 
+    func selectCommit(_ id: String?) {
+        commitLoadTask?.cancel()
+        selectedCommitFiles = []
+        selectedCommitFilesLoading = false
+        guard let root, let id else { return }
+        closeFileDetails()
+        selectedCommitFilesLoading = true
+        let rootPath = root.path()
+        commitLoadTask = Task { [weak self] in
+            let result = await Task.detached(priority: .userInitiated) {
+                Result { try CoreBridge.commitFiles(rootPath, commit: id) }
+            }.value
+            guard !Task.isCancelled, let self, self.selection == id else { return }
+            switch result {
+            case let .success(files): self.selectedCommitFiles = files
+            case let .failure(error): self.errorMessage = error.localizedDescription
+            }
+            self.selectedCommitFilesLoading = false
+        }
+    }
+
+    func selectCommitFile(_ change: CoreCommitFileChange) {
+        guard let root, let commit = selection else { return }
+        fileLoadTask?.cancel()
+        selectedFile = change.path
+        selectedFileCommit = commit
+        selectedFileDiff = ""
+        selectedHunks = []
+        selectedFileIsLoading = true
+        let rootPath = root.path()
+        fileLoadTask = Task { [weak self] in
+            let result = await Task.detached(priority: .userInitiated) {
+                Result { try CoreBridge.commitFileDiff(rootPath, commit: commit, file: change.path) }
+            }.value
+            guard !Task.isCancelled,
+                  let self,
+                  self.selectedFile == change.path,
+                  self.selectedFileCommit == commit else { return }
+            switch result {
+            case let .success(diff): self.selectedFileDiff = diff
+            case let .failure(error): self.errorMessage = error.localizedDescription
+            }
+            self.selectedFileIsLoading = false
+        }
+    }
+
     func closeFileDetails() {
         fileLoadTask?.cancel()
         selectedFile = nil
+        selectedFileCommit = nil
         selectedFileDiff = ""
         selectedHunks = []
         selectedFileIsLoading = false

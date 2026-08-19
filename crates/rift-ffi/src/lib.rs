@@ -280,6 +280,42 @@ pub unsafe extern "C" fn rift_commit_graph_json(path: *const c_char, limit: usiz
 }
 
 #[unsafe(no_mangle)]
+/// Lists files changed by one commit as an owned UTF-8 JSON string.
+///
+/// # Safety
+/// Both pointers must be null or point to valid, NUL-terminated C strings. The
+/// return value must be released exactly once with [`rift_string_free`].
+pub unsafe extern "C" fn rift_commit_files_json(
+    path: *const c_char,
+    commit: *const c_char,
+) -> *mut c_char {
+    respond(|| {
+        let path = unsafe { required_string(path, "path")? };
+        let commit = unsafe { required_string(commit, "commit")? };
+        rift_core::commit_files(path, &commit).map_err(|error| error.to_string())
+    })
+}
+
+#[unsafe(no_mangle)]
+/// Reads the patch for one file in a commit as an owned UTF-8 JSON string.
+///
+/// # Safety
+/// All pointers must be null or point to valid, NUL-terminated C strings. The
+/// return value must be released exactly once with [`rift_string_free`].
+pub unsafe extern "C" fn rift_commit_file_diff_json(
+    path: *const c_char,
+    commit: *const c_char,
+    file: *const c_char,
+) -> *mut c_char {
+    respond(|| {
+        let path = unsafe { required_string(path, "path")? };
+        let commit = unsafe { required_string(commit, "commit")? };
+        let file = unsafe { required_string(file, "file")? };
+        rift_core::commit_file_diff(path, &commit, &file).map_err(|error| error.to_string())
+    })
+}
+
+#[unsafe(no_mangle)]
 /// Splits one file diff into independently applicable hunks.
 ///
 /// # Safety

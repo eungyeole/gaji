@@ -36,6 +36,12 @@ struct CoreGraphCommit: Decodable {
     let subject: String
 }
 
+struct CoreCommitFileChange: Decodable, Identifiable {
+    let status: String
+    let path: String
+    var id: String { path }
+}
+
 struct CoreDiffHunk: Decodable, Identifiable, Sendable {
     let id: Int
     let header: String
@@ -137,6 +143,22 @@ enum CoreBridge {
     static func graph(_ path: String, limit: Int = 500) throws -> [CoreGraphCommit] {
         let pointer = path.withCString { rift_commit_graph_json($0, limit) }
         return try decode(pointer, as: [CoreGraphCommit].self)
+    }
+
+    static func commitFiles(_ path: String, commit: String) throws -> [CoreCommitFileChange] {
+        let pointer = path.withCString { pathPointer in
+            commit.withCString { rift_commit_files_json(pathPointer, $0) }
+        }
+        return try decode(pointer, as: [CoreCommitFileChange].self)
+    }
+
+    static func commitFileDiff(_ path: String, commit: String, file: String) throws -> String {
+        let pointer = path.withCString { pathPointer in
+            commit.withCString { commitPointer in
+                file.withCString { rift_commit_file_diff_json(pathPointer, commitPointer, $0) }
+            }
+        }
+        return try decode(pointer, as: String.self)
     }
 
     static func hunks(_ path: String, file: String, staged: Bool) throws -> [CoreDiffHunk] {

@@ -105,8 +105,14 @@ struct ContentView: View {
                                     }
                                 }
                                 .frame(minWidth: 420, maxWidth: .infinity)
-                                WorkingCopyInspector()
-                                    .frame(minWidth: 300, idealWidth: 360, maxWidth: 480)
+                                Group {
+                                    if repository.selection != nil {
+                                        CommitInspector()
+                                    } else {
+                                        WorkingCopyInspector()
+                                    }
+                                }
+                                .frame(minWidth: 300, idealWidth: 360, maxWidth: 480)
                             }
                         }
                     }
@@ -593,8 +599,22 @@ private struct SidebarView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            TextField("Search branches", text: $branchQuery)
-                .textFieldStyle(.roundedBorder)
+            HStack(spacing: 7) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(.secondary)
+                TextField("Search branches", text: $branchQuery)
+                    .textFieldStyle(.plain)
+                if !branchQuery.isEmpty {
+                    Button { branchQuery = "" } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+                .padding(.horizontal, 9)
+                .frame(height: 28)
+                .glassEffect(.regular, in: .rect(cornerRadius: 8))
                 .padding(.horizontal, 10)
                 .padding(.vertical, 7)
             List(selection: $selectedItem) {
@@ -883,6 +903,91 @@ private struct WorkingCopyInspector: View {
     }
 }
 
+private struct CommitInspector: View {
+    @Environment(RepositoryStore.self) private var repository
+
+    private var commit: Commit? {
+        repository.commits.first { $0.id == repository.selection }
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            if let commit {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(commit.subject).font(.headline).lineLimit(2)
+                    HStack(spacing: 6) {
+                        Text(commit.author)
+                        if let date = commit.date { Text("·"); Text(date, style: .relative) }
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    Text(String(commit.id.prefix(12)))
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(14)
+                .background(.bar)
+            }
+            Divider()
+            HStack {
+                Text("Changed Files").font(.subheadline.weight(.semibold))
+                Text("\(repository.selectedCommitFiles.count)")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                Spacer()
+            }
+            .padding(.horizontal, 12)
+            .frame(height: 36)
+            .background(.bar)
+
+            if repository.selectedCommitFilesLoading {
+                ProgressView("Loading files…")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if repository.selectedCommitFiles.isEmpty {
+                ContentUnavailableView("No Changed Files", systemImage: "doc")
+            } else {
+                List(repository.selectedCommitFiles) { change in
+                    HStack(spacing: 8) {
+                        Text(commitStatusMark(change.status))
+                            .font(.system(.callout, design: .monospaced, weight: .bold))
+                            .foregroundStyle(commitStatusColor(change.status))
+                            .frame(width: 14)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text((change.path as NSString).lastPathComponent).lineLimit(1)
+                            let parent = (change.path as NSString).deletingLastPathComponent
+                            if !parent.isEmpty && parent != "." {
+                                Text(parent).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                            }
+                        }
+                    }
+                    .contentShape(Rectangle())
+                    .onTapGesture { repository.selectCommitFile(change) }
+                    .help(change.path)
+                    .listRowInsets(.init(top: 4, leading: 8, bottom: 4, trailing: 8))
+                    .listRowSeparator(.hidden)
+                }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+            }
+        }
+    }
+
+    private func commitStatusMark(_ status: String) -> String {
+        if status.hasPrefix("A") { return "+" }
+        if status.hasPrefix("D") { return "−" }
+        if status.hasPrefix("R") { return "R" }
+        return "M"
+    }
+
+    private func commitStatusColor(_ status: String) -> Color {
+        if status.hasPrefix("A") { return .green }
+        if status.hasPrefix("D") { return .red }
+        if status.hasPrefix("R") { return .blue }
+        return .orange
+    }
+}
+
 private struct ChangeBucket: View {
     @Environment(RepositoryStore.self) private var repository
     let staged: Bool
@@ -1018,7 +1123,7 @@ private struct FileDiffView: View {
                 Divider().frame(height: 18)
                 Text(repository.selectedFile ?? "Diff").font(.headline)
                 Spacer()
-                if let file = repository.selectedFile {
+                if repository.selectedFileCommit == nil, let file = repository.selectedFile {
                     if !repository.selectedFileIsStaged,
                        let change = repository.changes.first(where: { $0.path == file }),
                        change.worktreeStatus != "?" {
@@ -1039,7 +1144,7 @@ private struct FileDiffView: View {
                     description: Text("The file may be untracked, binary, or unchanged in this comparison."))
             } else {
                 VStack(spacing: 0) {
-                    if !repository.selectedHunks.isEmpty {
+                    if repository.selectedFileCommit == nil, !repository.selectedHunks.isEmpty {
                         ScrollView(.horizontal) {
                             LazyHStack(spacing: 8) {
                                 ForEach(repository.selectedHunks) { hunk in
@@ -1127,6 +1232,7 @@ private struct CommitList: View {
         }
         .environment(\.defaultMinListRowHeight, 24)
         .searchable(text: $repository.searchText, prompt: "Search commits")
+        .task(id: selection) { repository.selectCommit(selection) }
     }
 
 }

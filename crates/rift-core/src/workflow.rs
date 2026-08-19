@@ -77,6 +77,13 @@ pub struct GraphCommit {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct CommitFileChange {
+    pub status: String,
+    pub path: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BlameLine {
     pub line_number: usize,
     pub commit: String,
@@ -754,6 +761,49 @@ pub fn commit_graph(path: impl AsRef<Path>, limit: usize) -> Result<Vec<GraphCom
             })
         })
         .collect())
+}
+
+pub fn commit_files(
+    path: impl AsRef<Path>,
+    commit: &str,
+) -> Result<Vec<CommitFileChange>, RiftError> {
+    require_value("commit", commit)?;
+    let root = root(path.as_ref())?;
+    let output = git(
+        &root,
+        &[
+            "diff-tree",
+            "--root",
+            "--no-commit-id",
+            "--name-status",
+            "-r",
+            "-M",
+            commit,
+        ],
+    )?;
+    Ok(output
+        .lines()
+        .filter_map(|line| {
+            let fields: Vec<_> = line.split('\t').collect();
+            let status = fields.first()?.to_string();
+            let path = fields.last()?.to_string();
+            Some(CommitFileChange { status, path })
+        })
+        .collect())
+}
+
+pub fn commit_file_diff(
+    path: impl AsRef<Path>,
+    commit: &str,
+    file: &str,
+) -> Result<String, RiftError> {
+    require_value("commit", commit)?;
+    require_value("file", file)?;
+    let root = root(path.as_ref())?;
+    git(
+        &root,
+        &["show", "--format=", "--find-renames", commit, "--", file],
+    )
 }
 
 fn paths_command(path: &Path, prefix: &[&str], files: &[&str]) -> Result<(), RiftError> {
