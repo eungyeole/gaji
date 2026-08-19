@@ -946,6 +946,7 @@ private struct CommitInspector: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else if repository.selectedCommitFiles.isEmpty {
                 ContentUnavailableView("No Changed Files", systemImage: "doc")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 List(repository.selectedCommitFiles) { change in
                     HStack(spacing: 8) {
@@ -971,6 +972,7 @@ private struct CommitInspector: View {
                 .scrollContentBackground(.hidden)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func commitStatusMark(_ status: String) -> String {
@@ -1210,7 +1212,6 @@ private struct CommitList: View {
             .frame(height: 24)
             .listRowInsets(EdgeInsets(top: 0, leading: 8, bottom: 0, trailing: 8))
             .listRowSeparator(.hidden)
-            .modifier(CommitHoverDetails(commit: commit))
             .contextMenu {
                 Button("Cherry-Pick \(String(commit.id.prefix(8)))") {
                     repository.cherryPick(commit)
@@ -1426,6 +1427,7 @@ private struct CommitGraph: View {
                 context.stroke(Path(ellipseIn: node), with: .color(.white.opacity(0.75)), lineWidth: 1.5)
             }
             CommitAvatar(commit: row.commit)
+                .modifier(CommitHoverDetails(commit: row.commit))
                 .offset(x: x(row.nodeLane) - 9, y: 3)
         }
         .frame(width: 120)
