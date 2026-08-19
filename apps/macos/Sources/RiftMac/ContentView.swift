@@ -195,9 +195,6 @@ struct ContentView: View {
         .navigationTitle(repository.title)
         .toolbar {
             ToolbarItemGroup {
-                Button(action: workspace.chooseRepository) {
-                    Label("Open Repository", systemImage: "folder")
-                }
                 Menu {
                     Section("Pull Strategy") {
                         ForEach(PullBehavior.allCases, id: \.self) { behavior in
