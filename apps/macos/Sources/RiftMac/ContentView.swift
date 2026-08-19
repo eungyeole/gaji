@@ -1,8 +1,80 @@
 import AppKit
 import SwiftUI
 
+struct WorkspaceView: View {
+    @Environment(WorkspaceStore.self) private var workspace
+
+    var body: some View {
+        VStack(spacing: 0) {
+            RepositoryTabBar()
+            Divider()
+            ContentView()
+                .environment(workspace.selectedRepository)
+                .id(workspace.selectedTabID)
+        }
+    }
+}
+
+private struct RepositoryTabBar: View {
+    @Environment(WorkspaceStore.self) private var workspace
+
+    var body: some View {
+        ScrollView(.horizontal) {
+            HStack(spacing: 6) {
+                ForEach(workspace.tabs) { tab in
+                    HStack(spacing: 7) {
+                        Button {
+                            workspace.select(tab.id)
+                        } label: {
+                            HStack(spacing: 7) {
+                                if !tab.repository.changes.isEmpty ||
+                                   !tab.repository.commitMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                    Circle().fill(.orange).frame(width: 7, height: 7)
+                                }
+                                Text(tab.repository.title)
+                                    .lineLimit(1)
+                                    .frame(maxWidth: 150)
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        if workspace.tabs.count > 1 {
+                            Button {
+                                workspace.close(tab.id)
+                            } label: {
+                                Image(systemName: "xmark")
+                                    .font(.caption2.weight(.semibold))
+                            }
+                            .buttonStyle(.borderless)
+                        }
+                    }
+                    .padding(.horizontal, 11)
+                    .padding(.vertical, 7)
+                    .background(
+                        workspace.selectedTabID == tab.id
+                            ? Color.accentColor.opacity(0.14) : Color.clear,
+                        in: RoundedRectangle(cornerRadius: 9)
+                    )
+                }
+                Button(action: workspace.newTab) {
+                    Image(systemName: "plus")
+                        .frame(width: 22, height: 22)
+                }
+                .buttonStyle(.borderless)
+                .help("New Repository Tab")
+                Spacer(minLength: 8)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+        }
+        .scrollIndicators(.hidden)
+        .background(.bar)
+    }
+}
+
 struct ContentView: View {
     @Environment(RepositoryStore.self) private var repository
+    @Environment(WorkspaceStore.self) private var workspace
 
     var body: some View {
         @Bindable var repository = repository
@@ -18,16 +90,19 @@ struct ContentView: View {
                     }
                     NavigationSplitView {
                         SidebarView()
-                            .navigationSplitViewColumnWidth(min: 190, ideal: 230, max: 300)
+                            .navigationSplitViewColumnWidth(min: 210, ideal: 250, max: 320)
                     } content: {
-                        CommitList(selection: $repository.selection)
-                            .navigationSplitViewColumnWidth(min: 340, ideal: 430)
-                    } detail: {
-                        if repository.selection != nil, repository.selectedFile == nil {
-                            CommitDetail()
-                        } else {
-                            WorkingCopyInspector()
+                        Group {
+                            if repository.selectedFile != nil {
+                                FileDiffView()
+                            } else {
+                                CommitList(selection: $repository.selection)
+                            }
                         }
+                        .navigationSplitViewColumnWidth(min: 420, ideal: 620)
+                    } detail: {
+                        WorkingCopyInspector()
+                            .navigationSplitViewColumnWidth(min: 300, ideal: 360, max: 480)
                     }
                 }
             }
@@ -39,7 +114,7 @@ struct ContentView: View {
                     Label("Refresh", systemImage: "arrow.trianglehead.2.clockwise.rotate.90")
                 }
                 .disabled(repository.root == nil)
-                Button(action: repository.chooseRepository) {
+                Button(action: workspace.chooseRepository) {
                     Label("Open Repository", systemImage: "folder")
                 }
                 Button(action: repository.fetch) {
@@ -503,18 +578,20 @@ private struct WelcomeView: View {
 
 private struct SidebarView: View {
     @Environment(RepositoryStore.self) private var repository
+    @Environment(WorkspaceStore.self) private var workspace
 
     var body: some View {
         List {
             Section {
                 ForEach(repository.branches, id: \.self) { branch in
                     BranchRow(name: branch, isCurrent: branch == repository.branch)
+                        .listRowInsets(.init(top: 4, leading: 14, bottom: 4, trailing: 12))
                         .contentShape(Rectangle())
                         .onTapGesture(count: 2) { repository.switchBranch(branch) }
                         .contextMenu { localBranchMenu(branch) }
                 }
             } header: {
-                sectionHeader("Local", systemImage: "laptopcomputer") {
+                sectionHeader("Local") {
                     repository.showsCreateBranch = true
                 }
             }
@@ -522,6 +599,7 @@ private struct SidebarView: View {
             Section {
                 ForEach(repository.remoteBranches, id: \.self) { branch in
                     BranchRow(name: branch, isCurrent: false)
+                        .listRowInsets(.init(top: 4, leading: 14, bottom: 4, trailing: 12))
                         .contentShape(Rectangle())
                         .onTapGesture(count: 2) { repository.switchRemoteBranch(branch) }
                         .contextMenu {
@@ -536,7 +614,7 @@ private struct SidebarView: View {
                         }
                 }
             } header: {
-                sectionHeader("Remote", systemImage: "network") {
+                sectionHeader("Remote") {
                     repository.showsAddRemote = true
                 }
             }
@@ -545,22 +623,25 @@ private struct SidebarView: View {
                 ForEach(repository.worktrees) { worktree in
                     let name = worktree.branch ?? URL(fileURLWithPath: worktree.path).lastPathComponent
                     HStack(spacing: 7) {
-                        Image(systemName: worktree.path == repository.root?.path()
-                              ? "square.stack.3d.up.fill" : "square.stack.3d.up")
-                            .foregroundStyle(
-                                worktree.path == repository.root?.path() ? Color.accentColor : Color.secondary
-                            )
+                        Circle()
+                            .fill(worktree.path == repository.root?.path() ? Color.green : Color.secondary.opacity(0.35))
+                            .frame(width: 7, height: 7)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(name).lineLimit(1)
                             Text(URL(fileURLWithPath: worktree.path).lastPathComponent)
                                 .font(.caption2).foregroundStyle(.secondary).lineLimit(1)
                         }
                     }
+                    .listRowInsets(.init(top: 5, leading: 14, bottom: 5, trailing: 12))
                     .contentShape(Rectangle())
-                    .onTapGesture(count: 2) { repository.open(URL(fileURLWithPath: worktree.path)) }
+                    .onTapGesture(count: 2) {
+                        workspace.openRepository(URL(fileURLWithPath: worktree.path))
+                    }
                     .help(worktree.path)
                     .contextMenu {
-                        Button("Open Worktree") { repository.open(URL(fileURLWithPath: worktree.path)) }
+                        Button("Open Worktree in Tab") {
+                            workspace.openRepository(URL(fileURLWithPath: worktree.path))
+                        }
                         if worktree.path != repository.root?.path() {
                             Button("Remove Worktree", role: .destructive) {
                                 repository.removeWorktree(worktree.path)
@@ -569,20 +650,12 @@ private struct SidebarView: View {
                     }
                 }
             } header: {
-                sectionHeader("Worktrees", systemImage: "square.stack.3d.up") {
+                sectionHeader("Worktrees") {
                     repository.showsAddWorktree = true
                 }
             }
         }
         .listStyle(.sidebar)
-        .safeAreaInset(edge: .bottom) {
-            Text("Double-click a branch or worktree to switch")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(10)
-                .background(.bar)
-        }
     }
 
     @ViewBuilder
@@ -607,16 +680,18 @@ private struct SidebarView: View {
             .disabled(branch == repository.branch)
     }
 
-    private func sectionHeader(
-        _ title: String, systemImage: String, action: @escaping () -> Void
-    ) -> some View {
+    private func sectionHeader(_ title: String, action: @escaping () -> Void) -> some View {
         HStack {
-            Label(title, systemImage: systemImage)
+            Text(title)
+                .font(.caption.weight(.semibold))
             Spacer()
             Button(action: action) { Image(systemName: "plus") }
-                .buttonStyle(.plain)
+                .buttonStyle(.borderless)
+                .controlSize(.small)
+                .padding(.trailing, 7)
                 .help("Add \(title)")
         }
+        .padding(.top, 4)
     }
 }
 
@@ -626,8 +701,11 @@ private struct BranchRow: View {
 
     var body: some View {
         HStack(spacing: 7) {
-            Image(systemName: isCurrent ? "checkmark.circle.fill" : "arrow.triangle.branch")
-                .foregroundStyle(isCurrent ? .green : .secondary)
+            if isCurrent {
+                Circle().fill(.green).frame(width: 7, height: 7)
+            } else {
+                Color.clear.frame(width: 7, height: 7)
+            }
             Text(name).lineLimit(1)
             Spacer(minLength: 4)
             if isCurrent {
@@ -660,26 +738,13 @@ private struct WorkingCopyInspector: View {
             }
             .padding()
 
-            HSplitView {
+            VSplitView {
                 ChangeBucket(staged: false)
-                    .frame(minWidth: 240)
+                    .frame(minHeight: 150, maxHeight: .infinity)
                 ChangeBucket(staged: true)
-                    .frame(minWidth: 240)
+                    .frame(minHeight: 150, maxHeight: .infinity)
             }
-            .frame(minHeight: 180, idealHeight: 240, maxHeight: 320)
-
-            Divider()
-            if repository.selectedFile != nil {
-                FileDiffView()
-                    .frame(minHeight: 220)
-            } else {
-                ContentUnavailableView(
-                    "Select a changed file",
-                    systemImage: "doc.text.magnifyingglass",
-                    description: Text("Review its diff, then stage or unstage the whole file or individual hunks.")
-                )
-                .frame(minHeight: 220)
-            }
+            .frame(maxHeight: .infinity)
             Divider()
 
             VStack(alignment: .leading, spacing: 10) {
@@ -802,7 +867,9 @@ private struct FileDiffView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Image(systemName: "doc.text")
+                Button("History") { repository.selectedFile = nil }
+                    .buttonStyle(.borderless)
+                Divider().frame(height: 18)
                 Text(repository.selectedFile ?? "Diff").font(.headline)
                 Spacer()
                 if let file = repository.selectedFile {
@@ -879,31 +946,8 @@ private struct CommitList: View {
     var body: some View {
         @Bindable var repository = repository
 
-        VStack(spacing: 0) {
-            Button {
-                selection = nil
-                repository.selectedFile = nil
-            } label: {
-                HStack {
-                    Image(systemName: "pencil.and.list.clipboard")
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Working Copy").fontWeight(.semibold)
-                        Text("\(repository.changes.count) changed file(s)")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    if !repository.changes.isEmpty {
-                        Circle().fill(.orange).frame(width: 8, height: 8)
-                    }
-                }
-                .padding(10)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .background(selection == nil ? Color.accentColor.opacity(0.12) : .clear)
-            Divider()
-            List(visibleCommits, selection: $selection) { commit in
-                HStack(alignment: .top, spacing: 10) {
+        List(visibleCommits, selection: $selection) { commit in
+            HStack(alignment: .top, spacing: 10) {
                 VStack(spacing: 0) {
                     Rectangle().fill(.blue.opacity(0.45)).frame(width: 2, height: 8)
                     Circle().fill(commit.parents.count > 1 ? .purple : .blue).frame(width: 11, height: 11)
@@ -925,69 +969,27 @@ private struct CommitList: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 }
+            }
+            .padding(.vertical, 3)
+            .contextMenu {
+                Button("Cherry-Pick \(String(commit.id.prefix(8)))") {
+                    repository.cherryPick(commit)
                 }
-                .padding(.vertical, 3)
-                .contextMenu {
-                    Button("Cherry-Pick \(String(commit.id.prefix(8)))") {
-                        repository.cherryPick(commit)
-                    }
+                .disabled(repository.operation != nil)
+                Button("Revert Commit") { repository.revert(commit) }
                     .disabled(repository.operation != nil)
-                    Button("Revert Commit") { repository.revert(commit) }
-                        .disabled(repository.operation != nil)
-                    Button("Create Tag…") { repository.taggingCommit = commit }
-                    Menu("Reset Current Branch") {
-                        Button("Soft") { repository.reset(to: commit, mode: "--soft") }
-                        Button("Mixed") { repository.reset(to: commit, mode: "--mixed") }
-                        Button("Hard…", role: .destructive) { repository.pendingHardReset = commit }
-                    }
-                    Button("Copy Commit Hash") {
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(commit.id, forType: .string)
-                    }
+                Button("Create Tag…") { repository.taggingCommit = commit }
+                Menu("Reset Current Branch") {
+                    Button("Soft") { repository.reset(to: commit, mode: "--soft") }
+                    Button("Mixed") { repository.reset(to: commit, mode: "--mixed") }
+                    Button("Hard…", role: .destructive) { repository.pendingHardReset = commit }
+                }
+                Button("Copy Commit Hash") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(commit.id, forType: .string)
                 }
             }
         }
         .searchable(text: $repository.searchText, prompt: "Search commits")
-        .onChange(of: selection) { _, newValue in
-            if let newValue, let commit = repository.commits.first(where: { $0.id == newValue }) {
-                repository.select(commit)
-            }
-        }
-    }
-}
-
-private struct CommitDetail: View {
-    @Environment(RepositoryStore.self) private var repository
-    private var commit: Commit? { repository.commits.first { $0.id == repository.selection } }
-
-    var body: some View {
-        if let commit {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    Text(commit.subject).font(.title2.bold())
-                    LabeledContent("Author", value: commit.author)
-                    LabeledContent("Commit", value: String(commit.id.prefix(12)))
-                    if let date = commit.date { LabeledContent("Date") { Text(date, format: .dateTime) } }
-                    Divider()
-                    if repository.selectedCommitDiff.isEmpty {
-                        ContentUnavailableView("No Text Diff", systemImage: "doc.text.magnifyingglass")
-                            .frame(maxWidth: .infinity, minHeight: 260)
-                    } else {
-                        ScrollView([.horizontal, .vertical]) {
-                            Text(repository.selectedCommitDiff)
-                                .font(.system(.callout, design: .monospaced))
-                                .textSelection(.enabled)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                    }
-                }
-                .padding(24)
-            }
-            .task(id: commit.id) {
-                if repository.selectedCommitDiff.isEmpty { repository.select(commit) }
-            }
-        } else {
-            ContentUnavailableView("Select a Commit", systemImage: "point.3.connected.trianglepath.dotted")
-        }
     }
 }

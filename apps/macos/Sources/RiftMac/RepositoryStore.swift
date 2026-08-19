@@ -57,7 +57,6 @@ final class RepositoryStore {
     var selection: Commit.ID?
     var selectedFile: String?
     var selectedFileDiff = ""
-    var selectedCommitDiff = ""
     var selectedHunks: [CoreDiffHunk] = []
     var selectedFileIsStaged = false
     var commitMessage = ""
@@ -109,9 +108,10 @@ final class RepositoryStore {
         Set(worktrees.compactMap(\.branch))
     }
 
-    init() {
+    init(restoreLastRepository: Bool = true) {
         recentRepositories = UserDefaults.standard.stringArray(forKey: "recentRepositories") ?? []
-        if let path = UserDefaults.standard.string(forKey: "lastRepository"),
+        if restoreLastRepository,
+           let path = UserDefaults.standard.string(forKey: "lastRepository"),
            FileManager.default.fileExists(atPath: path) {
             open(URL(fileURLWithPath: path))
         }
@@ -252,15 +252,6 @@ final class RepositoryStore {
 
     func cherryPick(_ commit: Commit) {
         runCore(["action": "cherryPick", "path": rootPath, "revision": commit.id])
-    }
-
-    func select(_ commit: Commit) {
-        guard let root else { return }
-        selectedFile = nil
-        selection = commit.id
-        selectedCommitDiff = (try? git(
-            at: root, "show", "--format=fuller", "--stat", "--patch", "--no-ext-diff", commit.id
-        )) ?? ""
     }
 
     func select(_ change: FileChange, staged: Bool? = nil) {

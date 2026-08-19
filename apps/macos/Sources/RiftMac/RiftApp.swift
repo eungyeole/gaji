@@ -2,25 +2,28 @@ import SwiftUI
 
 @main
 struct RiftApp: App {
-    @State private var repository = RepositoryStore()
+    @State private var workspace = WorkspaceStore()
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
-                .environment(repository)
+            WorkspaceView()
+                .environment(workspace)
                 .frame(minWidth: 980, minHeight: 640)
         }
         .commands {
             CommandGroup(after: .newItem) {
-                Button("New Repository…") { repository.createRepository() }
+                Button("New Tab") { workspace.newTab() }
+                    .keyboardShortcut("t")
+                Divider()
+                Button("New Repository…") { workspace.selectedRepository.createRepository() }
                     .keyboardShortcut("n")
-                Button("Clone Repository…") { repository.showsClone = true }
+                Button("Clone Repository…") { workspace.selectedRepository.showsClone = true }
                     .keyboardShortcut("n", modifiers: [.command, .shift])
-                Button("Open Repository…") { repository.chooseRepository() }
+                Button("Open Repository…") { workspace.chooseRepository() }
                     .keyboardShortcut("o")
-                Button("Refresh") { repository.refresh() }
+                Button("Refresh") { workspace.selectedRepository.refresh() }
                     .keyboardShortcut("r")
-                    .disabled(repository.root == nil)
+                    .disabled(workspace.selectedRepository.root == nil)
             }
         }
         .defaultSize(width: 1280, height: 800)
