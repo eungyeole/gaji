@@ -584,17 +584,19 @@ private struct WelcomeView: View {
 private struct SidebarView: View {
     @Environment(RepositoryStore.self) private var repository
     @Environment(WorkspaceStore.self) private var workspace
-    @State private var selectedItem: String?
     @State private var hoveredItem: String?
 
     var body: some View {
         VStack(spacing: 0) {
-            List(selection: $selectedItem) {
+            List {
                 Section {
                 ForEach(repository.branches, id: \.self) { branch in
                     BranchRow(name: branch, isCurrent: branch == repository.branch)
-                        .tag("local:\(branch)")
-                        .sidebarHover(id: "local:\(branch)", hoveredItem: $hoveredItem)
+                        .sidebarRow(
+                            id: "local:\(branch)",
+                            isSelected: branch == repository.branch,
+                            hoveredItem: $hoveredItem
+                        )
                         .contentShape(Rectangle())
                         .onTapGesture(count: 2) { repository.switchBranch(branch) }
                         .contextMenu { localBranchMenu(branch) }
@@ -606,8 +608,10 @@ private struct SidebarView: View {
                 Section {
                 ForEach(repository.remoteBranches, id: \.self) { branch in
                     BranchRow(name: branch, isCurrent: false)
-                        .tag("remote:\(branch)")
-                        .sidebarHover(id: "remote:\(branch)", hoveredItem: $hoveredItem)
+                        .sidebarRow(
+                            id: "remote:\(branch)", isSelected: false,
+                            hoveredItem: $hoveredItem
+                        )
                         .contentShape(Rectangle())
                         .onTapGesture(count: 2) { repository.switchRemoteBranch(branch) }
                         .contextMenu {
@@ -642,8 +646,11 @@ private struct SidebarView: View {
                                 .lineLimit(1)
                         }
                     }
-                    .tag("worktree:\(worktree.path)")
-                    .sidebarHover(id: "worktree:\(worktree.path)", hoveredItem: $hoveredItem)
+                    .sidebarRow(
+                        id: "worktree:\(worktree.path)",
+                        isSelected: worktree.path == repository.root?.path(),
+                        hoveredItem: $hoveredItem
+                    )
                     .contentShape(Rectangle())
                     .onTapGesture(count: 2) {
                         workspace.openRepository(URL(fileURLWithPath: worktree.path))
@@ -715,34 +722,30 @@ private struct BranchRow: View {
     let isCurrent: Bool
 
     var body: some View {
-        HStack(spacing: 7) {
-            if isCurrent {
-                Circle().fill(.green).frame(width: 7, height: 7)
-            } else {
-                Color.clear.frame(width: 7, height: 7)
-            }
+        HStack {
             Text(name).lineLimit(1)
             Spacer(minLength: 4)
-            if isCurrent {
-                Text("HEAD").font(.caption2.bold()).foregroundStyle(.secondary)
-            }
         }
+        .foregroundStyle(isCurrent ? Color.accentColor : Color.primary)
         .frame(height: 28)
     }
 }
 
 private extension View {
-    func sidebarHover(id: String, hoveredItem: Binding<String?>) -> some View {
+    func sidebarRow(
+        id: String, isSelected: Bool, hoveredItem: Binding<String?>
+    ) -> some View {
         self
-            .padding(.horizontal, 8)
             .background(
-                hoveredItem.wrappedValue == id ? Color.primary.opacity(0.065) : Color.clear,
+                isSelected
+                    ? Color.accentColor.opacity(0.16)
+                    : hoveredItem.wrappedValue == id ? Color.primary.opacity(0.065) : Color.clear,
                 in: RoundedRectangle(cornerRadius: 7)
             )
             .onHover { isHovered in
                 hoveredItem.wrappedValue = isHovered ? id : nil
             }
-            .listRowInsets(.init(top: 2, leading: 10, bottom: 2, trailing: 10))
+            .listRowInsets(.init(top: 2, leading: 4, bottom: 2, trailing: 4))
             .listRowSeparator(.hidden)
     }
 }
@@ -825,6 +828,18 @@ private struct ChangeBucket: View {
         staged ? repository.stagedChanges : repository.unstagedChanges
     }
 
+    private var fileSelection: Binding<String?> {
+        Binding(
+            get: {
+                repository.selectedFileIsStaged == staged ? repository.selectedFile : nil
+            },
+            set: { path in
+                guard let path, let change = changes.first(where: { $0.path == path }) else { return }
+                repository.select(change, staged: staged)
+            }
+        )
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             HStack {
@@ -848,20 +863,24 @@ private struct ChangeBucket: View {
                     .foregroundStyle(.tertiary)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                List(changes) { change in
+                List(selection: fileSelection) {
+                    ForEach(changes) { change in
                     HStack(spacing: 8) {
                         Text(statusMark(change.statusLabel))
                             .font(.system(.callout, design: .monospaced, weight: .bold))
                             .foregroundStyle(statusColor(change.statusLabel))
                             .frame(width: 14)
-                        Button {
-                            repository.select(change, staged: staged)
-                        } label: {
-                            Text(change.path)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(fileName(change.path))
                                 .lineLimit(1)
-                                .frame(maxWidth: .infinity, alignment: .leading)
+                            if let parent = parentPath(change.path) {
+                                Text(parent)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
                         }
-                        .buttonStyle(.plain)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .help(change.path)
                         Button {
                             staged ? repository.unstage(change.path) : repository.stage(change.path)
@@ -873,6 +892,9 @@ private struct ChangeBucket: View {
                         .buttonStyle(.borderless)
                         .help(staged ? "Unstage file" : "Stage file")
                     }
+                    .tag(change.path)
+                    .contentShape(Rectangle())
+                    .listRowInsets(.init(top: 4, leading: 8, bottom: 4, trailing: 8))
                     .listRowSeparator(.hidden)
                     .contextMenu {
                         Button(staged ? "Unstage File" : "Stage File") {
@@ -885,6 +907,7 @@ private struct ChangeBucket: View {
                         }
                         Divider()
                         Button("Blame and File History") { repository.openBlame(change.path) }
+                    }
                     }
                 }
                 .listStyle(.plain)
@@ -909,6 +932,15 @@ private struct ChangeBucket: View {
         case "R": .blue
         default: .orange
         }
+    }
+
+    private func fileName(_ path: String) -> String {
+        (path as NSString).lastPathComponent
+    }
+
+    private func parentPath(_ path: String) -> String? {
+        let parent = (path as NSString).deletingLastPathComponent
+        return parent.isEmpty || parent == "." ? nil : parent
     }
 }
 
