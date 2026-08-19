@@ -1,13 +1,8 @@
-import AppKit
 import SwiftUI
 
 @main
 struct RiftApp: App {
     @State private var workspace = WorkspaceStore()
-
-    init() {
-        NSSplitView.appearance().dividerStyle = .thin
-    }
 
     var body: some Scene {
         WindowGroup {

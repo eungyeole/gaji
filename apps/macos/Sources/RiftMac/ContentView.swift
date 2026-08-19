@@ -13,6 +13,31 @@ struct WorkspaceView: View {
     }
 }
 
+private struct ThinSplitViewInstaller: NSViewRepresentable {
+    func makeNSView(context: Context) -> InstallerView { InstallerView() }
+
+    func updateNSView(_ view: InstallerView, context: Context) { view.install() }
+
+    final class InstallerView: NSView {
+        override func viewDidMoveToSuperview() {
+            super.viewDidMoveToSuperview()
+            install()
+        }
+
+        func install() {
+            var ancestor = superview
+            while let current = ancestor {
+                if let splitView = current as? NSSplitView {
+                    splitView.dividerStyle = .thin
+                    splitView.needsDisplay = true
+                    return
+                }
+                ancestor = current.superview
+            }
+        }
+    }
+}
+
 private struct RepositoryTabBar: View {
     @Environment(WorkspaceStore.self) private var workspace
 
@@ -126,6 +151,7 @@ struct ContentView: View {
                     }
                     NavigationSplitView(columnVisibility: $columnVisibility) {
                         SidebarView()
+                            .background(ThinSplitViewInstaller())
                             .navigationSplitViewColumnWidth(min: 210, ideal: 250, max: 320)
                     } detail: {
                         VStack(spacing: 0) {
@@ -148,6 +174,7 @@ struct ContentView: View {
                                 }
                                 .frame(minWidth: 300, idealWidth: 360, maxWidth: 480)
                             }
+                            .background(ThinSplitViewInstaller())
                         }
                     }
                 }
