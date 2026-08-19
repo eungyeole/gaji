@@ -70,6 +70,7 @@ public sealed partial class MainWindow : Window
     private void UpdateSubmodules_Click(object sender, RoutedEventArgs e) => ViewModel.UpdateSubmodules();
     private void Stash_Click(object sender, RoutedEventArgs e) => ViewModel.StashAll();
     private void PopStash_Click(object sender, RoutedEventArgs e) => ViewModel.PopLatestStash();
+    private void ApplyHunk_Click(object sender, RoutedEventArgs e) => ViewModel.ApplySelectedHunk();
 
     private async void AddWorktree_Click(object sender, RoutedEventArgs e)
     {

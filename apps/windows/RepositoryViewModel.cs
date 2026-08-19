@@ -20,12 +20,15 @@ public sealed class RepositoryViewModel : INotifyPropertyChanged
     private FileChangeItem? selectedChange;
     private CommitItem? selectedCommit;
     private readonly List<CommitItem> allCommits = [];
+    private bool selectedFileIsStaged;
+    private DiffHunkItem? selectedHunk;
 
     public ObservableCollection<CommitItem> Commits { get; } = [];
     public ObservableCollection<FileChangeItem> Changes { get; } = [];
     public ObservableCollection<string> Branches { get; } = [];
     public ObservableCollection<string> Tags { get; } = [];
     public ObservableCollection<string> RecentRepositories { get; } = [];
+    public ObservableCollection<DiffHunkItem> Hunks { get; } = [];
     private ObservableCollection<CoreWorktree> Worktrees { get; } = [];
     private ObservableCollection<CoreSubmodule> Submodules { get; } = [];
     private ObservableCollection<CoreStash> Stashes { get; } = [];
@@ -42,6 +45,8 @@ public sealed class RepositoryViewModel : INotifyPropertyChanged
     public bool HasSelectedConflict => selectedChange?.IsConflict == true;
     public bool HasSelectedFile => selectedChange is not null;
     public bool HasSelectedCommit => selectedCommit is not null;
+    public DiffHunkItem? SelectedHunk { get => selectedHunk; set => Set(ref selectedHunk, value); }
+    public string HunkActionLabel => selectedFileIsStaged ? "Unstage Hunk" : "Stage Hunk";
     public int WorktreeCount => Worktrees.Count;
     public int SubmoduleCount => Submodules.Count;
     public int StashCount => Stashes.Count;
@@ -136,6 +141,12 @@ public sealed class RepositoryViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(HasSelectedConflict));
         OnPropertyChanged(nameof(HasSelectedFile));
         DetailTitle = change.Path;
+        selectedFileIsStaged = change.IndexStatus is not ' ' and not '?';
+        OnPropertyChanged(nameof(HunkActionLabel));
+        Hunks.Clear();
+        foreach (var hunk in NativeCore.Hunks(root, change.Path, selectedFileIsStaged))
+            Hunks.Add(new(hunk.Id, hunk.Header, hunk.Patch));
+        SelectedHunk = Hunks.FirstOrDefault();
         if (change.IsConflict)
         {
             var @base = TryGit(root, "show", $":1:{change.Path}");
@@ -175,6 +186,16 @@ public sealed class RepositoryViewModel : INotifyPropertyChanged
                 $"{line.LineNumber,5} {line.Commit[..Math.Min(8, line.Commit.Length)]} {line.Author,-18} {line.Content}"));
         }
         catch (Exception error) { DetailTitle = "Git error"; DetailText = error.Message; }
+    }
+
+    public void ApplySelectedHunk()
+    {
+        if (root is null || SelectedHunk is null) return;
+        RunNative(new {
+            action = "applyPatch", path = root, patch = SelectedHunk.Patch,
+            staged = true, reverse = selectedFileIsStaged
+        });
+        if (selectedChange is not null) Select(selectedChange);
     }
 
     public void AddWorktree(string destination, string branchName)
@@ -380,6 +401,13 @@ public sealed class RepositoryViewModel : INotifyPropertyChanged
         OnPropertyChanged(property);
     }
 
+    private void Set(ref DiffHunkItem? field, DiffHunkItem? value, [CallerMemberName] string? property = null)
+    {
+        if (field == value) return;
+        field = value;
+        OnPropertyChanged(property);
+    }
+
     private void OnPropertyChanged([CallerMemberName] string? property = null) =>
         PropertyChanged?.Invoke(this, new(property));
 }
@@ -395,3 +423,5 @@ public sealed record FileChangeItem(char IndexStatus, char WorktreeStatus, strin
     public string Status => IndexStatus == '?' ? "U" : (IndexStatus == ' ' ? WorktreeStatus : IndexStatus).ToString();
     public bool IsConflict => IndexStatus == 'U' || WorktreeStatus == 'U' || (IndexStatus == 'A' && WorktreeStatus == 'A') || (IndexStatus == 'D' && WorktreeStatus == 'D');
 }
+
+public sealed record DiffHunkItem(int Id, string Header, string Patch);

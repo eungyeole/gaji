@@ -33,6 +33,12 @@ internal static class NativeCore
     private static extern nint rift_stashes_json([MarshalAs(UnmanagedType.LPUTF8Str)] string path);
 
     [DllImport("rift_ffi", CallingConvention = CallingConvention.Cdecl)]
+    private static extern nint rift_file_hunks_json(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string path,
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string file,
+        [MarshalAs(UnmanagedType.I1)] bool staged);
+
+    [DllImport("rift_ffi", CallingConvention = CallingConvention.Cdecl)]
     private static extern void rift_string_free(nint value);
 
     public static CoreSnapshot Inspect(string path) => Decode<CoreSnapshot>(rift_inspect_json(path));
@@ -43,6 +49,8 @@ internal static class NativeCore
     public static CoreWorktree[] Worktrees(string path) => Decode<CoreWorktree[]>(rift_worktrees_json(path));
     public static CoreSubmodule[] Submodules(string path) => Decode<CoreSubmodule[]>(rift_submodules_json(path));
     public static CoreStash[] Stashes(string path) => Decode<CoreStash[]>(rift_stashes_json(path));
+    public static CoreDiffHunk[] Hunks(string path, string file, bool staged) =>
+        Decode<CoreDiffHunk[]>(rift_file_hunks_json(path, file, staged));
 
     public static void Execute(object request)
     {
@@ -82,3 +90,4 @@ internal sealed record CoreBlameLine(int LineNumber, string Commit, string Autho
 internal sealed record CoreWorktree(string Path, string Commit, string? Branch, bool IsBare);
 internal sealed record CoreSubmodule(string Path, string Commit, char State);
 internal sealed record CoreStash(int Index, string Reference, string Subject);
+internal sealed record CoreDiffHunk(int Id, string Header, string Patch);

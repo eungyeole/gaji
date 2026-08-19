@@ -77,6 +77,26 @@ struct CoreSubmodule: Decodable, Identifiable {
     let commit: String
     let state: Character
     var id: String { path }
+
+    private enum CodingKeys: String, CodingKey {
+        case path, commit, state
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        path = try container.decode(String.self, forKey: .path)
+        commit = try container.decode(String.self, forKey: .commit)
+
+        let value = try container.decode(String.self, forKey: .state)
+        guard value.count == 1, let character = value.first else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .state,
+                in: container,
+                debugDescription: "Expected a single-character submodule state"
+            )
+        }
+        state = character
+    }
 }
 
 struct CoreStash: Decodable, Identifiable {
