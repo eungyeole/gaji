@@ -241,7 +241,9 @@ fn splits_and_stages_individual_hunks() {
         .replace("line 2\n", "changed 2\n")
         .replace("line 19\n", "changed 19\n");
     repository.write("many.txt", &changed);
-    let hunks = rift_core::file_hunks(repository.path(), "many.txt", false).unwrap();
+    let details = rift_core::file_diff_details(repository.path(), "many.txt", false).unwrap();
+    assert!(details.patch.contains("changed 2"));
+    let hunks = details.hunks;
     assert_eq!(hunks.len(), 2);
     rift_core::apply_diff_patch(repository.path(), &hunks[0].patch, true, false).unwrap();
     let staged = rift_core::file_diff(repository.path(), "many.txt", true).unwrap();

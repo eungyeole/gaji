@@ -75,6 +75,7 @@ private struct RepositoryTabBar: View {
 struct ContentView: View {
     @Environment(RepositoryStore.self) private var repository
     @Environment(WorkspaceStore.self) private var workspace
+    @State private var columnVisibility: NavigationSplitViewVisibility = .all
 
     var body: some View {
         @Bindable var repository = repository
@@ -88,8 +89,8 @@ struct ContentView: View {
                         ConflictBar()
                         Divider()
                     }
-                    NavigationSplitView {
-                        SidebarView()
+                    NavigationSplitView(columnVisibility: $columnVisibility) {
+                        SidebarView { columnVisibility = .doubleColumn }
                             .navigationSplitViewColumnWidth(min: 210, ideal: 250, max: 320)
                     } content: {
                         Group {
@@ -109,6 +110,15 @@ struct ContentView: View {
         }
         .navigationTitle(repository.title)
         .toolbar {
+            ToolbarItem(placement: .navigation) {
+                if columnVisibility != .all {
+                    Button {
+                        columnVisibility = .all
+                    } label: {
+                        Label("Show Sidebar", systemImage: "sidebar.left")
+                    }
+                }
+            }
             ToolbarItemGroup {
                 Button(action: repository.refresh) {
                     Label("Refresh", systemImage: "arrow.trianglehead.2.clockwise.rotate.90")
@@ -149,6 +159,7 @@ struct ContentView: View {
                 .disabled(repository.root == nil)
             }
         }
+        .toolbar(removing: .sidebarToggle)
         .sheet(isPresented: $repository.showsCreateBranch) {
             VStack(alignment: .leading, spacing: 16) {
                 Text("Create Branch").font(.title2.bold())
@@ -579,27 +590,47 @@ private struct WelcomeView: View {
 private struct SidebarView: View {
     @Environment(RepositoryStore.self) private var repository
     @Environment(WorkspaceStore.self) private var workspace
+    @State private var selectedItem: String?
+    @State private var hoveredItem: String?
+    let close: () -> Void
 
     var body: some View {
-        List {
-            Section {
+        VStack(spacing: 0) {
+            HStack {
+                Text("Branches")
+                    .font(.headline)
+                Spacer()
+                Button(action: close) {
+                    Image(systemName: "sidebar.left")
+                        .frame(width: 22, height: 22)
+                }
+                .buttonStyle(.borderless)
+                .help("Hide Sidebar")
+            }
+            .padding(.leading, 16)
+            .padding(.trailing, 10)
+            .padding(.vertical, 10)
+            Divider()
+
+            List(selection: $selectedItem) {
+                Section {
                 ForEach(repository.branches, id: \.self) { branch in
                     BranchRow(name: branch, isCurrent: branch == repository.branch)
-                        .listRowInsets(.init(top: 4, leading: 14, bottom: 4, trailing: 12))
+                        .tag("local:\(branch)")
+                        .sidebarHover(id: "local:\(branch)", hoveredItem: $hoveredItem)
                         .contentShape(Rectangle())
                         .onTapGesture(count: 2) { repository.switchBranch(branch) }
                         .contextMenu { localBranchMenu(branch) }
                 }
-            } header: {
-                sectionHeader("Local") {
-                    repository.showsCreateBranch = true
+                } header: {
+                    sectionHeader("Local") { repository.showsCreateBranch = true }
                 }
-            }
 
-            Section {
+                Section {
                 ForEach(repository.remoteBranches, id: \.self) { branch in
                     BranchRow(name: branch, isCurrent: false)
-                        .listRowInsets(.init(top: 4, leading: 14, bottom: 4, trailing: 12))
+                        .tag("remote:\(branch)")
+                        .sidebarHover(id: "remote:\(branch)", hoveredItem: $hoveredItem)
                         .contentShape(Rectangle())
                         .onTapGesture(count: 2) { repository.switchRemoteBranch(branch) }
                         .contextMenu {
@@ -613,26 +644,29 @@ private struct SidebarView: View {
                             }
                         }
                 }
-            } header: {
-                sectionHeader("Remote") {
-                    repository.showsAddRemote = true
+                } header: {
+                    sectionHeader("Remote") { repository.showsAddRemote = true }
                 }
-            }
 
-            Section {
+                Section {
                 ForEach(repository.worktrees) { worktree in
                     let name = worktree.branch ?? URL(fileURLWithPath: worktree.path).lastPathComponent
                     HStack(spacing: 7) {
                         Circle()
                             .fill(worktree.path == repository.root?.path() ? Color.green : Color.secondary.opacity(0.35))
                             .frame(width: 7, height: 7)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(name).lineLimit(1)
-                            Text(URL(fileURLWithPath: worktree.path).lastPathComponent)
-                                .font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                        Text(name).lineLimit(1)
+                        Spacer(minLength: 6)
+                        let folder = URL(fileURLWithPath: worktree.path).lastPathComponent
+                        if folder != name {
+                            Text(folder)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
                         }
                     }
-                    .listRowInsets(.init(top: 5, leading: 14, bottom: 5, trailing: 12))
+                    .tag("worktree:\(worktree.path)")
+                    .sidebarHover(id: "worktree:\(worktree.path)", hoveredItem: $hoveredItem)
                     .contentShape(Rectangle())
                     .onTapGesture(count: 2) {
                         workspace.openRepository(URL(fileURLWithPath: worktree.path))
@@ -649,13 +683,13 @@ private struct SidebarView: View {
                         }
                     }
                 }
-            } header: {
-                sectionHeader("Worktrees") {
-                    repository.showsAddWorktree = true
+                } header: {
+                    sectionHeader("Worktrees") { repository.showsAddWorktree = true }
                 }
             }
+            .listStyle(.sidebar)
+            .scrollContentBackground(.hidden)
         }
-        .listStyle(.sidebar)
     }
 
     @ViewBuilder
@@ -684,14 +718,18 @@ private struct SidebarView: View {
         HStack {
             Text(title)
                 .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
             Spacer()
-            Button(action: action) { Image(systemName: "plus") }
-                .buttonStyle(.borderless)
-                .controlSize(.small)
-                .padding(.trailing, 7)
-                .help("Add \(title)")
+            Button(action: action) {
+                Image(systemName: "plus")
+                    .font(.caption.weight(.semibold))
+                    .frame(width: 20, height: 20)
+            }
+            .buttonStyle(.borderless)
+            .padding(.trailing, 4)
+            .help("Add \(title)")
         }
-        .padding(.top, 4)
+        .frame(height: 24)
     }
 }
 
@@ -712,7 +750,23 @@ private struct BranchRow: View {
                 Text("HEAD").font(.caption2.bold()).foregroundStyle(.secondary)
             }
         }
-        .padding(.vertical, 2)
+        .frame(height: 28)
+    }
+}
+
+private extension View {
+    func sidebarHover(id: String, hoveredItem: Binding<String?>) -> some View {
+        self
+            .padding(.horizontal, 8)
+            .background(
+                hoveredItem.wrappedValue == id ? Color.primary.opacity(0.065) : Color.clear,
+                in: RoundedRectangle(cornerRadius: 7)
+            )
+            .onHover { isHovered in
+                hoveredItem.wrappedValue = isHovered ? id : nil
+            }
+            .listRowInsets(.init(top: 2, leading: 10, bottom: 2, trailing: 10))
+            .listRowSeparator(.hidden)
     }
 }
 
@@ -867,7 +921,7 @@ private struct FileDiffView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Button("History") { repository.selectedFile = nil }
+                Button("History", action: repository.closeFileDetails)
                     .buttonStyle(.borderless)
                 Divider().frame(height: 18)
                 Text(repository.selectedFile ?? "Diff").font(.headline)
@@ -885,44 +939,36 @@ private struct FileDiffView: View {
             }
             .padding()
             Divider()
-            if repository.selectedFileDiff.isEmpty {
+            if repository.selectedFileIsLoading {
+                ProgressView("Loading diff…")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else if repository.selectedFileDiff.isEmpty {
                 ContentUnavailableView("No Text Diff", systemImage: "doc",
                     description: Text("The file may be untracked, binary, or unchanged in this comparison."))
-            } else if !repository.selectedHunks.isEmpty {
-                ScrollView {
-                    LazyVStack(spacing: 12) {
-                        ForEach(repository.selectedHunks) { hunk in
-                            VStack(alignment: .leading, spacing: 0) {
-                                HStack {
-                                    Text(hunk.header)
-                                        .font(.system(.caption, design: .monospaced))
-                                        .foregroundStyle(.secondary)
-                                    Spacer()
-                                    Button(repository.selectedFileIsStaged ? "Unstage Hunk" : "Stage Hunk") {
+            } else {
+                VStack(spacing: 0) {
+                    if !repository.selectedHunks.isEmpty {
+                        ScrollView(.horizontal) {
+                            LazyHStack(spacing: 8) {
+                                ForEach(repository.selectedHunks) { hunk in
+                                    Button {
                                         repository.apply(hunk)
+                                    } label: {
+                                        Text("\(repository.selectedFileIsStaged ? "Unstage" : "Stage") \(hunk.header)")
+                                            .font(.system(.caption, design: .monospaced))
+                                            .lineLimit(1)
                                     }
                                     .buttonStyle(.glass)
                                 }
-                                .padding(8)
-                                Divider()
-                                Text(hunk.patch)
-                                    .font(.system(.body, design: .monospaced))
-                                    .textSelection(.enabled)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .padding(10)
                             }
-                            .background(.quaternary.opacity(0.3), in: RoundedRectangle(cornerRadius: 10))
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 7)
                         }
+                        .scrollIndicators(.hidden)
+                        .background(.bar)
+                        Divider()
                     }
-                    .padding()
-                }
-            } else {
-                ScrollView([.horizontal, .vertical]) {
-                    Text(repository.selectedFileDiff)
-                        .font(.system(.body, design: .monospaced))
-                        .textSelection(.enabled)
-                        .padding()
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    CodeTextView(text: repository.selectedFileDiff)
                 }
             }
         }

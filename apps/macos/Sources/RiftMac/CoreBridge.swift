@@ -35,10 +35,15 @@ struct CoreGraphCommit: Decodable {
     let subject: String
 }
 
-struct CoreDiffHunk: Decodable, Identifiable {
+struct CoreDiffHunk: Decodable, Identifiable, Sendable {
     let id: Int
     let header: String
     let patch: String
+}
+
+struct CoreFileDiff: Decodable, Sendable {
+    let patch: String
+    let hunks: [CoreDiffHunk]
 }
 
 struct CoreRebaseStep: Codable, Identifiable {
@@ -140,6 +145,15 @@ enum CoreBridge {
             }
         }
         return try decode(pointer, as: [CoreDiffHunk].self)
+    }
+
+    static func fileDiff(_ path: String, file: String, staged: Bool) throws -> CoreFileDiff {
+        let pointer = path.withCString { pathPointer in
+            file.withCString { filePointer in
+                rift_file_diff_json(pathPointer, filePointer, staged)
+            }
+        }
+        return try decode(pointer, as: CoreFileDiff.self)
     }
 
     static func rebasePlan(_ path: String, upstream: String) throws -> [CoreRebaseStep] {

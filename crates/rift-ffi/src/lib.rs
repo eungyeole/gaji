@@ -298,6 +298,24 @@ pub unsafe extern "C" fn rift_file_hunks_json(
 }
 
 #[unsafe(no_mangle)]
+/// Reads a file patch and its independently applicable hunks in one Git invocation.
+///
+/// # Safety
+/// Both pointers must be null or point to valid, NUL-terminated C strings. The
+/// return value must be released exactly once with [`rift_string_free`].
+pub unsafe extern "C" fn rift_file_diff_json(
+    path: *const c_char,
+    file: *const c_char,
+    staged: bool,
+) -> *mut c_char {
+    respond(|| {
+        let path = unsafe { required_string(path, "path")? };
+        let file = unsafe { required_string(file, "file")? };
+        rift_core::file_diff_details(path, &file, staged).map_err(|error| error.to_string())
+    })
+}
+
+#[unsafe(no_mangle)]
 /// Reads blame metadata for a file.
 ///
 /// # Safety

@@ -8,7 +8,7 @@ struct RiftApp: App {
         WindowGroup {
             WorkspaceView()
                 .environment(workspace)
-                .frame(minWidth: 980, minHeight: 640)
+                .frame(minWidth: 1100, minHeight: 680)
         }
         .commands {
             CommandGroup(after: .newItem) {

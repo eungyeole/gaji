@@ -24,6 +24,13 @@ pub struct DiffHunk {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct FileDiffDetails {
+    pub patch: String,
+    pub hunks: Vec<DiffHunk>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct BranchSummary {
     pub name: String,
     pub commit: String,
@@ -146,8 +153,17 @@ pub fn file_hunks(
     file: &str,
     staged: bool,
 ) -> Result<Vec<DiffHunk>, RiftError> {
+    file_diff_details(path, file, staged).map(|details| details.hunks)
+}
+
+pub fn file_diff_details(
+    path: impl AsRef<Path>,
+    file: &str,
+    staged: bool,
+) -> Result<FileDiffDetails, RiftError> {
     let patch = file_diff(path, file, staged)?;
-    Ok(parse_hunks(&patch))
+    let hunks = parse_hunks(&patch);
+    Ok(FileDiffDetails { patch, hunks })
 }
 
 pub fn apply_diff_patch(

@@ -42,6 +42,7 @@ enum GitOperation: String {
 @MainActor
 @Observable
 final class RepositoryStore {
+    @ObservationIgnored private var fileLoadTask: Task<Void, Never>?
     private(set) var root: URL?
     private(set) var branch = ""
     private(set) var changes: [FileChange] = []
@@ -59,6 +60,7 @@ final class RepositoryStore {
     var selectedFileDiff = ""
     var selectedHunks: [CoreDiffHunk] = []
     var selectedFileIsStaged = false
+    var selectedFileIsLoading = false
     var commitMessage = ""
     var commitAmend = false
     var commitSign = false
@@ -235,9 +237,7 @@ final class RepositoryStore {
             }
             conflicts = state.conflicts
             if let selectedFile, !changes.contains(where: { $0.path == selectedFile }) {
-                self.selectedFile = nil
-                selectedFileDiff = ""
-                selectedHunks = []
+                closeFileDetails()
             }
             if let selection, !commits.contains(where: { $0.id == selection }) {
                 self.selection = changes.isEmpty ? commits.first?.id : nil
@@ -256,14 +256,36 @@ final class RepositoryStore {
 
     func select(_ change: FileChange, staged: Bool? = nil) {
         guard let root else { return }
+        fileLoadTask?.cancel()
         selectedFile = change.path
         selection = nil
         let inspectStaged = staged ?? (change.indexStatus != " " && change.indexStatus != "?")
         selectedFileIsStaged = inspectStaged
-        selectedFileDiff = (try? git(
-            at: root, "diff", inspectStaged ? "--cached" : "--no-ext-diff", "--", change.path
-        )) ?? ""
-        selectedHunks = (try? CoreBridge.hunks(root.path(), file: change.path, staged: inspectStaged)) ?? []
+        selectedFileIsLoading = true
+        selectedFileDiff = ""
+        selectedHunks = []
+        let rootPath = root.path()
+        let file = change.path
+        fileLoadTask = Task { [weak self] in
+            let details = await Task.detached(priority: .userInitiated) {
+                Self.loadFileDetails(rootPath: rootPath, file: file, staged: inspectStaged)
+            }.value
+            guard !Task.isCancelled,
+                  let self,
+                  self.selectedFile == file,
+                  self.selectedFileIsStaged == inspectStaged else { return }
+            self.selectedFileDiff = details.diff
+            self.selectedHunks = details.hunks
+            self.selectedFileIsLoading = false
+        }
+    }
+
+    func closeFileDetails() {
+        fileLoadTask?.cancel()
+        selectedFile = nil
+        selectedFileDiff = ""
+        selectedHunks = []
+        selectedFileIsLoading = false
     }
 
     func apply(_ hunk: CoreDiffHunk) {
@@ -566,6 +588,15 @@ final class RepositoryStore {
 
     private var rootPath: String { root?.path() ?? "" }
 
+    private nonisolated static func loadFileDetails(
+        rootPath: String, file: String, staged: Bool
+    ) -> LoadedFileDetails {
+        guard let details = try? CoreBridge.fileDiff(rootPath, file: file, staged: staged) else {
+            return LoadedFileDetails(diff: "", hunks: [])
+        }
+        return LoadedFileDetails(diff: details.patch, hunks: details.hunks)
+    }
+
     private func runCore(_ request: [String: Any]) {
         var operationError: String?
         do {
@@ -605,6 +636,11 @@ final class RepositoryStore {
         return String(decoding: stdout.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
     }
 
+}
+
+private struct LoadedFileDetails: Sendable {
+    let diff: String
+    let hunks: [CoreDiffHunk]
 }
 
 enum GitError: LocalizedError {
