@@ -2,6 +2,17 @@ import AppKit
 import CryptoKit
 import SwiftUI
 
+private enum RiftUI {
+    static let panelInset: CGFloat = 10
+    static let sectionSpacing: CGFloat = 10
+    static let headerHeight: CGFloat = 40
+    static let sectionHeaderHeight: CGFloat = 32
+    static let rowRadius: CGFloat = 8
+    static let cardRadius: CGFloat = 12
+    static let hoverOpacity = 0.055
+    static let selectionOpacity = 0.16
+}
+
 struct WorkspaceView: View {
     @Environment(WorkspaceStore.self) private var workspace
 
@@ -75,8 +86,8 @@ private struct RepositoryTabBar: View {
                     .padding(.vertical, 7)
                     .background(
                         workspace.selectedTabID == tab.id
-                            ? Color.accentColor.opacity(0.14) : Color.clear,
-                        in: RoundedRectangle(cornerRadius: 9)
+                            ? Color.accentColor.opacity(RiftUI.selectionOpacity) : Color.clear,
+                        in: RoundedRectangle(cornerRadius: RiftUI.rowRadius)
                     )
                 }
                 Button(action: workspace.newTab) {
@@ -668,7 +679,10 @@ private struct RecentRepositoryRow: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 7)
-            .background(Color.primary.opacity(isHovering ? 0.055 : 0), in: RoundedRectangle(cornerRadius: 8))
+            .background(
+                Color.primary.opacity(isHovering ? RiftUI.hoverOpacity : 0),
+                in: RoundedRectangle(cornerRadius: RiftUI.rowRadius)
+            )
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -703,7 +717,7 @@ private struct SidebarView: View {
             }
                 .padding(.horizontal, 9)
                 .frame(height: 28)
-                .glassEffect(.regular, in: .rect(cornerRadius: 8))
+                .glassEffect(.regular, in: .rect(cornerRadius: RiftUI.rowRadius))
                 .padding(.horizontal, 10)
                 .padding(.vertical, 7)
             List(selection: $selectedItem) {
@@ -925,7 +939,7 @@ private struct WorkingCopyInspector: View {
     var body: some View {
         @Bindable var repository = repository
 
-        VStack(spacing: 10) {
+        VStack(spacing: RiftUI.sectionSpacing) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Working Copy").font(.headline)
@@ -949,7 +963,7 @@ private struct WorkingCopyInspector: View {
                 }
             }
             .padding(.horizontal, 4)
-            .frame(height: 40)
+            .frame(height: RiftUI.headerHeight)
 
             VStack(spacing: 8) {
                 ChangeBucket(staged: false)
@@ -979,7 +993,10 @@ private struct WorkingCopyInspector: View {
                     .lineLimit(2...5)
                     .textFieldStyle(.plain)
                     .padding(9)
-                    .background(Color(nsColor: .textBackgroundColor).opacity(0.55), in: RoundedRectangle(cornerRadius: 8))
+                    .background(
+                        Color(nsColor: .textBackgroundColor).opacity(0.55),
+                        in: RoundedRectangle(cornerRadius: RiftUI.rowRadius)
+                    )
                 Button {
                     repository.createCommit()
                 } label: {
@@ -994,9 +1011,9 @@ private struct WorkingCopyInspector: View {
                     )
             }
             .padding(12)
-            .glassEffect(.regular, in: .rect(cornerRadius: 12))
+            .glassEffect(.regular, in: .rect(cornerRadius: RiftUI.cardRadius))
         }
-        .padding(10)
+        .padding(RiftUI.panelInset)
     }
 }
 
@@ -1008,16 +1025,23 @@ private struct CommitInspector: View {
     }
 
     var body: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: RiftUI.sectionSpacing) {
+            HStack {
+                Button {
+                    repository.closeFileDetails()
+                    repository.selection = nil
+                } label: {
+                    Label("Changes", systemImage: "chevron.left")
+                }
+                .buttonStyle(.borderless)
+                Spacer()
+                Text("Commit Details").font(.headline)
+            }
+            .padding(.horizontal, 4)
+            .frame(height: RiftUI.headerHeight)
+
             if let commit {
                 VStack(alignment: .leading, spacing: 6) {
-                    Button {
-                        repository.closeFileDetails()
-                        repository.selection = nil
-                    } label: {
-                        Label("Changes", systemImage: "chevron.left")
-                    }
-                    .buttonStyle(.borderless)
                     Text(commit.subject).font(.headline).lineLimit(2)
                     HStack(spacing: 6) {
                         Text(commit.author)
@@ -1031,7 +1055,7 @@ private struct CommitInspector: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(12)
-                .glassEffect(.regular, in: .rect(cornerRadius: 12))
+                .glassEffect(.regular, in: .rect(cornerRadius: RiftUI.cardRadius))
             }
             HStack {
                 Text("Changed Files").font(.subheadline.weight(.semibold))
@@ -1041,7 +1065,7 @@ private struct CommitInspector: View {
                 Spacer()
             }
             .padding(.horizontal, 12)
-            .frame(height: 32)
+            .frame(height: RiftUI.sectionHeaderHeight)
 
             if repository.selectedCommitFilesLoading {
                 ProgressView()
@@ -1064,7 +1088,7 @@ private struct CommitInspector: View {
                 }
             }
         }
-        .padding(10)
+        .padding(RiftUI.panelInset)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
@@ -1099,8 +1123,10 @@ private struct CommitFileRow: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 5)
         .background(
-            isSelected ? Color.accentColor.opacity(0.16) : Color.primary.opacity(isHovering ? 0.055 : 0),
-            in: RoundedRectangle(cornerRadius: 8)
+            isSelected
+                ? Color.accentColor.opacity(RiftUI.selectionOpacity)
+                : Color.primary.opacity(isHovering ? RiftUI.hoverOpacity : 0),
+            in: RoundedRectangle(cornerRadius: RiftUI.rowRadius)
         )
     }
 }
@@ -1140,8 +1166,7 @@ private struct ChangeBucket: View {
                 .disabled(changes.isEmpty)
             }
             .padding(.horizontal, 12)
-            .frame(height: 36)
-            .background(.bar)
+            .frame(height: RiftUI.sectionHeaderHeight)
             if changes.isEmpty {
                 Text(staged ? "No staged files" : "No unstaged files")
                     .font(.callout)
@@ -1202,8 +1227,10 @@ private struct ChangeFileRow: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 5)
         .background(
-            isSelected ? Color.accentColor.opacity(0.16) : Color.primary.opacity(isHovering ? 0.055 : 0),
-            in: RoundedRectangle(cornerRadius: 8)
+            isSelected
+                ? Color.accentColor.opacity(RiftUI.selectionOpacity)
+                : Color.primary.opacity(isHovering ? RiftUI.hoverOpacity : 0),
+            in: RoundedRectangle(cornerRadius: RiftUI.rowRadius)
         )
         .contextMenu {
             Button(staged ? "Unstage File" : "Stage File") {
@@ -1227,7 +1254,7 @@ private struct StatusBadge: View {
             .font(.system(.caption2, design: .monospaced, weight: .bold))
             .foregroundStyle(color)
             .frame(width: 20, height: 20)
-            .background(color.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
+            .background(color.opacity(0.12), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
     }
 
     private var mark: String {
@@ -1267,7 +1294,8 @@ private struct FileDiffView: View {
                     }
                 }
             }
-            .padding()
+            .padding(.horizontal, 12)
+            .frame(height: 44)
             Divider()
             if repository.selectedFileIsLoading {
                 ProgressView("Loading diff…")
