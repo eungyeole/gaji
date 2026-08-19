@@ -8,9 +8,10 @@ private enum RiftUI {
     static let headerHeight: CGFloat = 40
     static let sectionHeaderHeight: CGFloat = 32
     static let rowRadius: CGFloat = 8
-    static let cardRadius: CGFloat = 12
     static let hoverOpacity = 0.055
     static let selectionOpacity = 0.16
+    static let fieldOpacity = 0.045
+    static let statusOpacity = 0.82
 }
 
 struct WorkspaceView: View {
@@ -120,10 +121,10 @@ private struct OperationGradientLine: View {
     var body: some View {
         LinearGradient(
             colors: [
-                Color.accentColor.opacity(0.04),
-                Color.accentColor.opacity(0.22),
-                Color.purple.opacity(0.1),
-                Color.accentColor.opacity(0.04)
+                Color.accentColor.opacity(0.02),
+                Color.accentColor.opacity(0.16),
+                Color.accentColor.opacity(0.08),
+                Color.accentColor.opacity(0.02)
             ],
             startPoint: .leading,
             endPoint: .trailing
@@ -993,10 +994,7 @@ private struct WorkingCopyInspector: View {
                     .lineLimit(2...5)
                     .textFieldStyle(.plain)
                     .padding(9)
-                    .background(
-                        Color(nsColor: .textBackgroundColor).opacity(0.55),
-                        in: RoundedRectangle(cornerRadius: RiftUI.rowRadius)
-                    )
+                    .background(Color.primary.opacity(RiftUI.fieldOpacity), in: RoundedRectangle(cornerRadius: RiftUI.rowRadius))
                 Button {
                     repository.createCommit()
                 } label: {
@@ -1011,7 +1009,7 @@ private struct WorkingCopyInspector: View {
                     )
             }
             .padding(12)
-            .glassEffect(.regular, in: .rect(cornerRadius: RiftUI.cardRadius))
+            .overlay(alignment: .top) { Divider() }
         }
         .padding(RiftUI.panelInset)
     }
@@ -1055,7 +1053,7 @@ private struct CommitInspector: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(12)
-                .glassEffect(.regular, in: .rect(cornerRadius: RiftUI.cardRadius))
+                .overlay(alignment: .bottom) { Divider() }
             }
             HStack {
                 Text("Changed Files").font(.subheadline.weight(.semibold))
@@ -1265,10 +1263,10 @@ private struct StatusBadge: View {
     }
 
     private var color: Color {
-        if status.hasPrefix("A") || status.hasPrefix("U") { return .green }
-        if status.hasPrefix("D") { return .red }
-        if status.hasPrefix("R") { return .blue }
-        return .orange
+        if status.hasPrefix("A") || status.hasPrefix("U") { return .green.opacity(RiftUI.statusOpacity) }
+        if status.hasPrefix("D") { return .red.opacity(RiftUI.statusOpacity) }
+        if status.hasPrefix("R") { return .blue.opacity(RiftUI.statusOpacity) }
+        return .orange.opacity(RiftUI.statusOpacity)
     }
 }
 
@@ -1392,6 +1390,8 @@ private struct CommitList: View {
                 }
             }
         }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
         .environment(\.defaultMinListRowHeight, 24)
         .searchable(text: $repository.searchText, prompt: "Search commits")
         .task(id: selection) { repository.selectCommit(selection) }
@@ -1546,7 +1546,10 @@ private func commitGraphRows(_ commits: [Commit]) -> [CommitGraphRow] {
 private struct CommitGraph: View {
     let row: CommitGraphRow
     let spacing: CGFloat
-    private let colors: [Color] = [.blue, .purple, .orange, .green, .pink, .cyan, .indigo, .mint]
+    private let colors: [Color] = [
+        .blue.opacity(0.86), .purple.opacity(0.78), .orange.opacity(0.8), .green.opacity(0.78),
+        .pink.opacity(0.74), .cyan.opacity(0.76), .indigo.opacity(0.8), .mint.opacity(0.76)
+    ]
 
     var body: some View {
         ZStack(alignment: .topLeading) {
