@@ -1056,32 +1056,41 @@ private struct CommitList: View {
     @Environment(RepositoryStore.self) private var repository
     @Binding var selection: Commit.ID?
 
-    private var visibleCommits: [Commit] {
+    private var visibleRows: [CommitGraphRow] {
         let query = repository.searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return repository.commits }
-        return repository.commits.filter {
-            $0.subject.localizedCaseInsensitiveContains(query) ||
-            $0.author.localizedCaseInsensitiveContains(query) ||
-            $0.id.localizedCaseInsensitiveContains(query)
+        let rows = commitGraphRows(repository.commits)
+        guard !query.isEmpty else { return rows }
+        return rows.filter {
+            $0.commit.subject.localizedCaseInsensitiveContains(query) ||
+            $0.commit.author.localizedCaseInsensitiveContains(query) ||
+            $0.commit.id.localizedCaseInsensitiveContains(query)
         }
     }
 
     var body: some View {
         @Bindable var repository = repository
+        let rows = visibleRows
+        let graphWidth = CGFloat(rows.map { max($0.topLanes.count, $0.bottomLanes.count) }.max() ?? 1) * 16
 
-        List(visibleCommits, selection: $selection) { commit in
-            HStack(alignment: .top, spacing: 10) {
-                VStack(spacing: 0) {
-                    Rectangle().fill(.blue.opacity(0.45)).frame(width: 2, height: 8)
-                    Circle().fill(commit.parents.count > 1 ? .purple : .blue).frame(width: 11, height: 11)
-                    Rectangle().fill(.blue.opacity(0.45)).frame(width: 2, height: 30)
-                }
+        List(rows, selection: $selection) { row in
+            let commit = row.commit
+            HStack(alignment: .top, spacing: 8) {
+                CommitGraph(row: row, width: graphWidth)
                 VStack(alignment: .leading, spacing: 5) {
                     if !commit.references.isEmpty {
-                        Text(commit.references.joined(separator: " · "))
-                            .font(.caption2.bold())
-                            .foregroundStyle(.tint)
-                            .lineLimit(1)
+                        ScrollView(.horizontal) {
+                            HStack(spacing: 4) {
+                                ForEach(commit.references, id: \.self) { reference in
+                                    Text(reference.replacingOccurrences(of: "HEAD -> ", with: ""))
+                                        .font(.caption2.weight(.semibold))
+                                        .foregroundStyle(reference.hasPrefix("tag: ") ? Color.orange : Color.accentColor)
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 2)
+                                        .background(Color.accentColor.opacity(0.1), in: Capsule())
+                                }
+                            }
+                        }
+                        .scrollIndicators(.hidden)
                     }
                     Text(commit.subject).fontWeight(.medium).lineLimit(2)
                     HStack {
@@ -1116,4 +1125,78 @@ private struct CommitList: View {
         }
         .searchable(text: $repository.searchText, prompt: "Search commits")
     }
+}
+
+private struct CommitGraphRow: Identifiable {
+    let commit: Commit
+    let topLanes: [String]
+    let bottomLanes: [String]
+    let nodeLane: Int
+    var id: String { commit.id }
+}
+
+private func commitGraphRows(_ commits: [Commit]) -> [CommitGraphRow] {
+    var lanes: [String] = []
+    return commits.map { commit in
+        if !lanes.contains(commit.id) { lanes.insert(commit.id, at: 0) }
+        let top = lanes
+        let nodeLane = lanes.firstIndex(of: commit.id) ?? 0
+        lanes.remove(at: nodeLane)
+        for parent in commit.parents { lanes.removeAll { $0 == parent } }
+        lanes.insert(contentsOf: commit.parents, at: min(nodeLane, lanes.count))
+        return CommitGraphRow(commit: commit, topLanes: top, bottomLanes: lanes, nodeLane: nodeLane)
+    }
+}
+
+private struct CommitGraph: View {
+    let row: CommitGraphRow
+    let width: CGFloat
+    private let spacing: CGFloat = 16
+    private let colors: [Color] = [.blue, .purple, .orange, .green, .pink, .cyan, .indigo, .mint]
+
+    var body: some View {
+        Canvas { context, size in
+            let centerY: CGFloat = 14
+            let color = colors[row.nodeLane % colors.count]
+
+            for (topLane, hash) in row.topLanes.enumerated() where hash != row.commit.id {
+                guard let bottomLane = row.bottomLanes.firstIndex(of: hash) else { continue }
+                var path = Path()
+                path.move(to: point(topLane, 0))
+                path.addCurve(
+                    to: point(bottomLane, size.height),
+                    control1: point(topLane, size.height * 0.45),
+                    control2: point(bottomLane, size.height * 0.55)
+                )
+                context.stroke(path, with: .color(colors[topLane % colors.count].opacity(0.72)), lineWidth: 2)
+            }
+
+            var incoming = Path()
+            incoming.move(to: point(row.nodeLane, 0))
+            incoming.addLine(to: point(row.nodeLane, centerY))
+            context.stroke(incoming, with: .color(color), lineWidth: 2)
+
+            for parent in row.commit.parents {
+                guard let lane = row.bottomLanes.firstIndex(of: parent) else { continue }
+                var path = Path()
+                path.move(to: point(row.nodeLane, centerY))
+                path.addCurve(
+                    to: point(lane, size.height),
+                    control1: point(row.nodeLane, size.height * 0.55),
+                    control2: point(lane, size.height * 0.72)
+                )
+                context.stroke(path, with: .color(colors[lane % colors.count]), lineWidth: 2)
+            }
+
+            let node = CGRect(x: x(row.nodeLane) - 5, y: centerY - 5, width: 10, height: 10)
+            context.fill(Path(ellipseIn: node), with: .color(color))
+            context.stroke(Path(ellipseIn: node), with: .color(.white.opacity(0.75)), lineWidth: 1.5)
+        }
+        .frame(width: max(24, width))
+        .frame(minHeight: 54, maxHeight: .infinity)
+        .accessibilityHidden(true)
+    }
+
+    private func x(_ lane: Int) -> CGFloat { CGFloat(lane) * spacing + 8 }
+    private func point(_ lane: Int, _ y: CGFloat) -> CGPoint { CGPoint(x: x(lane), y: y) }
 }
