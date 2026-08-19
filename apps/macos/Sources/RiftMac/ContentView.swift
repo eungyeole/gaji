@@ -778,19 +778,24 @@ private struct WorkingCopyInspector: View {
 
         VStack(spacing: 0) {
             HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Working Copy").font(.title2.bold())
-                    Text("\(repository.unstagedChanges.count) unstaged · \(repository.stagedChanges.count) staged")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
+                Text("Changes").font(.headline)
                 Spacer()
                 if !repository.unstagedChanges.isEmpty {
-                    Button("Discard All", role: .destructive) {
-                        repository.requestDiscard(repository.unstagedChanges.map(\.path))
+                    Menu {
+                        Button("Discard All Changes…", role: .destructive) {
+                            repository.requestDiscard(repository.unstagedChanges.map(\.path))
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
                     }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
                 }
             }
-            .padding()
+            .padding(.horizontal, 14)
+            .frame(height: 42)
+            .background(.bar)
+            Divider()
 
             VSplitView {
                 ChangeBucket(staged: false)
@@ -801,28 +806,37 @@ private struct WorkingCopyInspector: View {
             .frame(maxHeight: .infinity)
             Divider()
 
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Commit").font(.headline)
+            VStack(alignment: .leading, spacing: 9) {
+                HStack {
+                    Text("Commit").font(.headline)
+                    Spacer()
+                    Menu {
+                        Toggle("Amend Previous Commit", isOn: $repository.commitAmend)
+                        Toggle("Sign Commit", isOn: $repository.commitSign)
+                        Toggle("Add Signed-off-by", isOn: $repository.commitSignoff)
+                    } label: {
+                        Label("Options", systemImage: "slider.horizontal.3")
+                    }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
+                }
                 TextField("Summary", text: $repository.commitMessage, axis: .vertical)
                     .lineLimit(2...5)
                     .textFieldStyle(.roundedBorder)
-                HStack(spacing: 14) {
-                    Toggle("Amend", isOn: $repository.commitAmend)
-                    Toggle("Sign", isOn: $repository.commitSign)
-                    Toggle("Sign-off", isOn: $repository.commitSignoff)
-                    Spacer()
-                    Button("Commit to \(repository.branch)") { repository.createCommit() }
-                        .buttonStyle(.glassProminent)
-                        .keyboardShortcut(.return, modifiers: .command)
-                        .disabled(
-                            (repository.stagedChanges.isEmpty && !repository.commitAmend) ||
-                            repository.commitMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                        )
+                Button {
+                    repository.createCommit()
+                } label: {
+                    Text("Commit to \(repository.branch)")
+                        .frame(maxWidth: .infinity)
                 }
-                .toggleStyle(.checkbox)
-                .font(.caption)
+                    .buttonStyle(.glassProminent)
+                    .keyboardShortcut(.return, modifiers: .command)
+                    .disabled(
+                        (repository.stagedChanges.isEmpty && !repository.commitAmend) ||
+                        repository.commitMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    )
             }
-            .padding()
+            .padding(14)
             .background(.bar)
         }
     }
@@ -839,8 +853,10 @@ private struct ChangeBucket: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text(staged ? "Staged Files" : "Unstaged Files").font(.headline)
-                Text("\(changes.count)").foregroundStyle(.secondary)
+                Text(staged ? "Staged" : "Unstaged").font(.subheadline.weight(.semibold))
+                Text("\(changes.count)")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
                 Spacer()
                 Button(staged ? "Unstage All" : "Stage All") {
                     staged ? repository.unstageAll() : repository.stageAll()
@@ -849,18 +865,21 @@ private struct ChangeBucket: View {
                 .disabled(changes.isEmpty)
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .frame(height: 36)
+            .background(.bar)
             Divider()
             if changes.isEmpty {
-                ContentUnavailableView(
-                    staged ? "Nothing Staged" : "No Unstaged Changes",
-                    systemImage: staged ? "tray" : "checkmark.circle"
-                )
+                Text(staged ? "No staged files" : "No unstaged files")
+                    .font(.callout)
+                    .foregroundStyle(.tertiary)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 List(changes) { change in
                     HStack(spacing: 8) {
-                        Image(systemName: statusIcon(change.statusLabel))
+                        Text(statusMark(change.statusLabel))
+                            .font(.system(.callout, design: .monospaced, weight: .bold))
                             .foregroundStyle(statusColor(change.statusLabel))
+                            .frame(width: 14)
                         Button {
                             repository.select(change, staged: staged)
                         } label: {
@@ -873,7 +892,9 @@ private struct ChangeBucket: View {
                         Button {
                             staged ? repository.unstage(change.path) : repository.stage(change.path)
                         } label: {
-                            Image(systemName: staged ? "arrow.left" : "arrow.right")
+                            Text(staged ? "−" : "+")
+                                .font(.system(.body, design: .rounded, weight: .medium))
+                                .frame(width: 18, height: 18)
                         }
                         .buttonStyle(.borderless)
                         .help(staged ? "Unstage file" : "Stage file")
@@ -891,17 +912,18 @@ private struct ChangeBucket: View {
                         Button("Blame and File History") { repository.openBlame(change.path) }
                     }
                 }
-                .listStyle(.inset)
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
             }
         }
     }
 
-    private func statusIcon(_ status: String) -> String {
+    private func statusMark(_ status: String) -> String {
         switch status {
-        case "A", "U": "plus.circle.fill"
-        case "D": "minus.circle.fill"
-        case "R": "arrow.right.circle.fill"
-        default: "pencil.circle.fill"
+        case "A", "U": "+"
+        case "D": "−"
+        case "R": "R"
+        default: "M"
         }
     }
 
