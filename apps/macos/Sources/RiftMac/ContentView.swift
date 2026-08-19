@@ -1183,6 +1183,7 @@ private struct FileDiffView: View {
             } else if repository.selectedFileDiff.isEmpty {
                 ContentUnavailableView("No Text Diff", systemImage: "doc",
                     description: Text("The file may be untracked, binary, or unchanged in this comparison."))
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 VStack(spacing: 0) {
                     if repository.selectedFileCommit == nil, !repository.selectedHunks.isEmpty {
@@ -1211,6 +1212,7 @@ private struct FileDiffView: View {
                 }
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
