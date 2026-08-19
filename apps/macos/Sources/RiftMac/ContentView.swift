@@ -82,7 +82,6 @@ struct ContentView: View {
             if repository.root == nil {
                 VStack(spacing: 0) {
                     RepositoryTabBar()
-                    if repository.isBusy { OperationProgressBar() }
                     WelcomeView()
                 }
             } else {
@@ -90,9 +89,6 @@ struct ContentView: View {
                     if repository.operation != nil {
                         ConflictBar()
                         Divider()
-                    }
-                    if repository.isBusy {
-                        OperationProgressBar()
                     }
                     NavigationSplitView(columnVisibility: $columnVisibility) {
                         SidebarView()
@@ -125,6 +121,14 @@ struct ContentView: View {
         }
         .navigationTitle(repository.title)
         .toolbar {
+            ToolbarItem(placement: .navigation) {
+                if repository.isBusy {
+                    ProgressView()
+                        .controlSize(.small)
+                        .frame(width: 16, height: 16)
+                        .transition(.opacity)
+                }
+            }
             ToolbarItemGroup {
                 Button(action: repository.refresh) {
                     Label("Refresh", systemImage: "arrow.trianglehead.2.clockwise.rotate.90")
@@ -447,24 +451,6 @@ struct ContentView: View {
         } message: {
             Text(repository.errorMessage ?? "Unknown error")
         }
-    }
-}
-
-private struct OperationProgressBar: View {
-    @Environment(RepositoryStore.self) private var repository
-
-    var body: some View {
-        HStack(spacing: 9) {
-            ProgressView().controlSize(.small)
-            Text(repository.busyMessage ?? "Working…")
-                .font(.callout.weight(.medium))
-            Spacer()
-        }
-        .padding(.horizontal, 14)
-        .frame(height: 34)
-        .background(.bar)
-        .overlay(alignment: .bottom) { Divider() }
-        .transition(.move(edge: .top).combined(with: .opacity))
     }
 }
 
@@ -858,9 +844,14 @@ private struct WorkingCopyInspector: View {
     var body: some View {
         @Bindable var repository = repository
 
-        VStack(spacing: 0) {
+        VStack(spacing: 10) {
             HStack {
-                Text("Changes").font(.headline)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Working Copy").font(.headline)
+                    Text("\(repository.unstagedChanges.count) unstaged · \(repository.stagedChanges.count) staged")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 Spacer()
                 if !repository.unstagedChanges.isEmpty {
                     Menu {
@@ -876,15 +867,14 @@ private struct WorkingCopyInspector: View {
                     .fixedSize()
                 }
             }
-            .padding(.horizontal, 14)
-            .frame(height: 42)
-            .background(.bar)
+            .padding(.horizontal, 4)
+            .frame(height: 40)
 
-            VSplitView {
+            VStack(spacing: 8) {
                 ChangeBucket(staged: false)
-                    .frame(minHeight: 150, maxHeight: .infinity)
+                    .frame(minHeight: 120, maxHeight: .infinity)
                 ChangeBucket(staged: true)
-                    .frame(minHeight: 150, maxHeight: .infinity)
+                    .frame(minHeight: 120, maxHeight: .infinity)
             }
             .frame(maxHeight: .infinity)
 
@@ -897,7 +887,8 @@ private struct WorkingCopyInspector: View {
                         Toggle("Sign Commit", isOn: $repository.commitSign)
                         Toggle("Add Signed-off-by", isOn: $repository.commitSignoff)
                     } label: {
-                        Label("Options", systemImage: "slider.horizontal.3")
+                        Image(systemName: "slider.horizontal.3")
+                            .frame(width: 22, height: 22)
                     }
                     .menuIndicator(.hidden)
                     .buttonStyle(.glass)
@@ -905,7 +896,9 @@ private struct WorkingCopyInspector: View {
                 }
                 TextField("Summary", text: $repository.commitMessage, axis: .vertical)
                     .lineLimit(2...5)
-                    .textFieldStyle(.roundedBorder)
+                    .textFieldStyle(.plain)
+                    .padding(9)
+                    .background(Color(nsColor: .textBackgroundColor).opacity(0.55), in: RoundedRectangle(cornerRadius: 8))
                 Button {
                     repository.createCommit()
                 } label: {
@@ -919,9 +912,11 @@ private struct WorkingCopyInspector: View {
                         repository.commitMessage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                     )
             }
-            .padding(14)
-            .background(.bar)
+            .padding(12)
+            .glassEffect(.regular, in: .rect(cornerRadius: 12))
         }
+        .padding(10)
+        .background(Color(nsColor: .windowBackgroundColor).opacity(0.72))
     }
 }
 
@@ -933,7 +928,7 @@ private struct CommitInspector: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
+        VStack(spacing: 10) {
             if let commit {
                 VStack(alignment: .leading, spacing: 6) {
                     Button {
@@ -955,10 +950,9 @@ private struct CommitInspector: View {
                         .foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(14)
-                .background(.bar)
+                .padding(12)
+                .glassEffect(.regular, in: .rect(cornerRadius: 12))
             }
-            Divider()
             HStack {
                 Text("Changed Files").font(.subheadline.weight(.semibold))
                 Text("\(repository.selectedCommitFiles.count)")
@@ -967,15 +961,17 @@ private struct CommitInspector: View {
                 Spacer()
             }
             .padding(.horizontal, 12)
-            .frame(height: 36)
-            .background(.bar)
+            .frame(height: 32)
 
             if repository.selectedCommitFilesLoading {
-                ProgressView("Loading files…")
+                ProgressView()
+                    .controlSize(.small)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .inspectorCard()
             } else if repository.selectedCommitFiles.isEmpty {
                 ContentUnavailableView("No Changed Files", systemImage: "doc")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .inspectorCard()
             } else {
                 List(repository.selectedCommitFiles) { change in
                     HStack(spacing: 8) {
@@ -999,8 +995,11 @@ private struct CommitInspector: View {
                 }
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
+                .inspectorCard()
             }
         }
+        .padding(10)
+        .background(Color(nsColor: .windowBackgroundColor).opacity(0.72))
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
@@ -1064,82 +1063,83 @@ private struct ChangeBucket: View {
             } else {
                 List(selection: fileSelection) {
                     ForEach(changes) { change in
-                    HStack(spacing: 8) {
-                        Text(statusMark(change.statusLabel))
-                            .font(.system(.callout, design: .monospaced, weight: .bold))
-                            .foregroundStyle(statusColor(change.statusLabel))
-                            .frame(width: 14)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(fileName(change.path))
-                                .lineLimit(1)
-                            if let parent = parentPath(change.path) {
-                                Text(parent)
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .help(change.path)
-                        Button {
-                            staged ? repository.unstage(change.path) : repository.stage(change.path)
-                        } label: {
-                            Text(staged ? "−" : "+")
-                                .font(.system(.body, design: .rounded, weight: .medium))
-                                .frame(width: 18, height: 18)
-                        }
-                        .buttonStyle(.borderless)
-                        .help(staged ? "Unstage file" : "Stage file")
-                    }
-                    .tag(change.path)
-                    .contentShape(Rectangle())
-                    .listRowInsets(.init(top: 4, leading: 8, bottom: 4, trailing: 8))
-                    .listRowSeparator(.hidden)
-                    .contextMenu {
-                        Button(staged ? "Unstage File" : "Stage File") {
-                            staged ? repository.unstage(change.path) : repository.stage(change.path)
-                        }
-                        if !staged, change.worktreeStatus != "?" {
-                            Button("Discard Changes…", role: .destructive) {
-                                repository.requestDiscard([change.path])
-                            }
-                        }
-                        Divider()
-                        Button("Blame and File History") { repository.openBlame(change.path) }
-                    }
+                        ChangeFileRow(change: change, staged: staged)
+                            .tag(change.path)
                     }
                 }
                 .listStyle(.plain)
                 .scrollContentBackground(.hidden)
             }
         }
+        .background(Color(nsColor: .controlBackgroundColor).opacity(0.58), in: RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color(nsColor: .separatorColor).opacity(0.45)))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
+}
 
-    private func statusMark(_ status: String) -> String {
-        switch status {
-        case "A", "U": "+"
-        case "D": "−"
-        case "R": "R"
-        default: "M"
+private extension View {
+    func inspectorCard() -> some View {
+        background(Color(nsColor: .controlBackgroundColor).opacity(0.58), in: RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color(nsColor: .separatorColor).opacity(0.45)))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+    }
+}
+
+private struct ChangeFileRow: View {
+    @Environment(RepositoryStore.self) private var repository
+    let change: FileChange
+    let staged: Bool
+    @State private var isHovering = false
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(statusMark)
+                .font(.system(.callout, design: .monospaced, weight: .bold))
+                .foregroundStyle(statusColor)
+                .frame(width: 14)
+            VStack(alignment: .leading, spacing: 1) {
+                Text((change.path as NSString).lastPathComponent).lineLimit(1)
+                let parent = (change.path as NSString).deletingLastPathComponent
+                if !parent.isEmpty && parent != "." {
+                    Text(parent).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Button {
+                staged ? repository.unstage(change.path) : repository.stage(change.path)
+            } label: {
+                Image(systemName: staged ? "minus" : "plus")
+                    .font(.caption.weight(.semibold))
+                    .frame(width: 20, height: 20)
+            }
+            .buttonStyle(.glass)
+            .opacity(isHovering ? 1 : 0)
+            .allowsHitTesting(isHovering)
+            .help(staged ? "Unstage file" : "Stage file")
+        }
+        .contentShape(Rectangle())
+        .onHover { isHovering = $0 }
+        .help(change.path)
+        .listRowInsets(.init(top: 3, leading: 8, bottom: 3, trailing: 8))
+        .listRowSeparator(.hidden)
+        .contextMenu {
+            Button(staged ? "Unstage File" : "Stage File") {
+                staged ? repository.unstage(change.path) : repository.stage(change.path)
+            }
+            if !staged, change.worktreeStatus != "?" {
+                Button("Discard Changes…", role: .destructive) { repository.requestDiscard([change.path]) }
+            }
+            Divider()
+            Button("Blame and File History") { repository.openBlame(change.path) }
         }
     }
 
-    private func statusColor(_ status: String) -> Color {
-        switch status {
-        case "A", "U": .green
-        case "D": .red
-        case "R": .blue
-        default: .orange
-        }
+    private var statusMark: String {
+        switch change.statusLabel { case "A", "U": "+"; case "D": "−"; case "R": "R"; default: "M" }
     }
 
-    private func fileName(_ path: String) -> String {
-        (path as NSString).lastPathComponent
-    }
-
-    private func parentPath(_ path: String) -> String? {
-        let parent = (path as NSString).deletingLastPathComponent
-        return parent.isEmpty || parent == "." ? nil : parent
+    private var statusColor: Color {
+        switch change.statusLabel { case "A", "U": .green; case "D": .red; case "R": .blue; default: .orange }
     }
 }
 
