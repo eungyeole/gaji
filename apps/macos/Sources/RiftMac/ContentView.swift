@@ -1096,7 +1096,6 @@ private struct CommitInspector: View {
                     }
                 }
             }
-            .glassEffect(.regular, in: .rect(cornerRadius: 14))
         }
         .padding(RiftUI.panelInset)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -1206,7 +1205,6 @@ private struct ChangeBucket: View {
                 }
             }
         }
-        .glassEffect(.regular, in: .rect(cornerRadius: 14))
     }
 }
 
