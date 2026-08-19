@@ -91,6 +91,9 @@ final class RepositoryStore {
     var showsAddWorktree = false
     var worktreeDestination = ""
     var worktreeBranch = ""
+    var renamingBranch: String?
+    var renamedBranch = ""
+    var deletingBranch: String?
 
     var title: String { root?.lastPathComponent ?? "Rift" }
 
@@ -391,6 +394,25 @@ final class RepositoryStore {
             newBranchName = ""
             showsCreateBranch = false
         }
+    }
+
+    func beginRenameBranch(_ name: String) {
+        renamingBranch = name
+        renamedBranch = name
+    }
+
+    func renameBranch() {
+        guard let old = renamingBranch else { return }
+        let new = renamedBranch.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !new.isEmpty else { return }
+        renamingBranch = nil
+        runCore(["action": "renameBranch", "path": rootPath, "old": old, "new": new])
+    }
+
+    func deleteBranch() {
+        guard let name = deletingBranch else { return }
+        deletingBranch = nil
+        runCore(["action": "deleteBranch", "path": rootPath, "name": name, "force": false])
     }
 
     func fetch() {

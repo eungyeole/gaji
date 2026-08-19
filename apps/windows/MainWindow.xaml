@@ -46,6 +46,9 @@
                           IsEnabled="{x:Bind ViewModel.HasSelectedFile, Mode=OneWay}" />
             <AppBarButton Icon="Library" Label="Add Worktree" Click="AddWorktree_Click" />
             <AppBarButton Icon="SyncFolder" Label="Submodules" Click="UpdateSubmodules_Click" />
+            <AppBarButton Icon="Rename" Label="Rename Branch" Click="RenameBranch_Click" />
+            <AppBarButton Label="New Branch" Click="NewBranch_Click" />
+            <AppBarButton Icon="Delete" Label="Delete Branch" Click="DeleteBranch_Click" />
             <AppBarSeparator />
             <AppBarButton Label="Use Current" Click="UseCurrent_Click" IsEnabled="{x:Bind ViewModel.HasSelectedConflict, Mode=OneWay}" />
             <AppBarButton Label="Use Incoming" Click="UseIncoming_Click" IsEnabled="{x:Bind ViewModel.HasSelectedConflict, Mode=OneWay}" />

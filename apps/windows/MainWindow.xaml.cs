@@ -81,6 +81,41 @@ public sealed partial class MainWindow : Window
         if (parent is not null) ViewModel.AddWorktree(Path.Combine(parent.Path, branch), branch);
     }
 
+    private async void RenameBranch_Click(object sender, RoutedEventArgs e)
+    {
+        var name = new TextBox { Text = ViewModel.Branch };
+        var dialog = new ContentDialog {
+            XamlRoot = Content.XamlRoot, Title = "Rename Branch", Content = name,
+            PrimaryButtonText = "Rename", CloseButtonText = "Cancel"
+        };
+        if (await dialog.ShowAsync() == ContentDialogResult.Primary && !string.IsNullOrWhiteSpace(name.Text))
+            ViewModel.RenameBranch(ViewModel.Branch, name.Text.Trim());
+    }
+
+    private async void NewBranch_Click(object sender, RoutedEventArgs e)
+    {
+        var name = new TextBox { PlaceholderText = "feature/my-change" };
+        var dialog = new ContentDialog {
+            XamlRoot = Content.XamlRoot, Title = "New Branch", Content = name,
+            PrimaryButtonText = "Create and Switch", CloseButtonText = "Cancel"
+        };
+        if (await dialog.ShowAsync() == ContentDialogResult.Primary && !string.IsNullOrWhiteSpace(name.Text))
+            ViewModel.CreateBranch(name.Text.Trim());
+    }
+
+    private async void DeleteBranch_Click(object sender, RoutedEventArgs e)
+    {
+        var branches = new ComboBox {
+            Header = "Branch", ItemsSource = ViewModel.Branches.Where(branch => branch != ViewModel.Branch).ToArray()
+        };
+        var dialog = new ContentDialog {
+            XamlRoot = Content.XamlRoot, Title = "Delete Merged Branch", Content = branches,
+            PrimaryButtonText = "Delete", CloseButtonText = "Cancel"
+        };
+        if (await dialog.ShowAsync() == ContentDialogResult.Primary && branches.SelectedItem is string branch)
+            ViewModel.DeleteBranch(branch);
+    }
+
     private async void CreateTag_Click(object sender, RoutedEventArgs e)
     {
         var name = new TextBox { PlaceholderText = "v1.0.0" };

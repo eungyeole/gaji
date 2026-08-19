@@ -178,6 +178,24 @@ public sealed class RepositoryViewModel : INotifyPropertyChanged
             RunNative(new { action = "addWorktree", path = root, destination, branch = branchName });
     }
 
+    public void RenameBranch(string oldName, string newName)
+    {
+        if (root is not null)
+            RunNative(new { action = "renameBranch", path = root, old = oldName, @new = newName });
+    }
+
+    public void CreateBranch(string name)
+    {
+        if (root is not null)
+            RunNative(new { action = "createBranch", path = root, name, start = "HEAD", @switch = true });
+    }
+
+    public void DeleteBranch(string name)
+    {
+        if (root is not null)
+            RunNative(new { action = "deleteBranch", path = root, name, force = false });
+    }
+
     public void UpdateSubmodules()
     {
         if (root is not null)

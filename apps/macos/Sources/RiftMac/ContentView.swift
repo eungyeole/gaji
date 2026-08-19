@@ -66,6 +66,10 @@ struct ContentView: View {
                                 .disabled(branch == repository.branch)
                             Button("Interactive Rebase…") { repository.prepareInteractiveRebase(onto: branch) }
                                 .disabled(branch == repository.branch)
+                            Divider()
+                            Button("Rename…") { repository.beginRenameBranch(branch) }
+                            Button("Delete…", role: .destructive) { repository.deletingBranch = branch }
+                                .disabled(branch == repository.branch)
                         }
                     }
                     Divider()
@@ -289,6 +293,39 @@ struct ContentView: View {
             }
             .padding(24)
             .frame(width: 540)
+        }
+        .sheet(isPresented: Binding(
+            get: { repository.renamingBranch != nil },
+            set: { if !$0 { repository.renamingBranch = nil } }
+        )) {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Rename Branch").font(.title2.bold())
+                TextField("New name", text: $repository.renamedBranch)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit(repository.renameBranch)
+                HStack {
+                    Spacer()
+                    Button("Cancel") { repository.renamingBranch = nil }
+                    Button("Rename", action: repository.renameBranch)
+                        .buttonStyle(.glassProminent)
+                        .disabled(repository.renamedBranch.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+            .padding(24)
+            .frame(width: 440)
+        }
+        .confirmationDialog(
+            "Delete branch \(repository.deletingBranch ?? "")?",
+            isPresented: Binding(
+                get: { repository.deletingBranch != nil },
+                set: { if !$0 { repository.deletingBranch = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Delete Branch", role: .destructive, action: repository.deleteBranch)
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Git will refuse to delete a branch whose commits are not merged.")
         }
         .sheet(isPresented: Binding(
             get: { repository.conflictFile != nil },

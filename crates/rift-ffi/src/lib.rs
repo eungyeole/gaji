@@ -77,6 +77,16 @@ enum Request {
         start: String,
         switch: bool,
     },
+    RenameBranch {
+        path: String,
+        old: String,
+        new: String,
+    },
+    DeleteBranch {
+        path: String,
+        name: String,
+        force: bool,
+    },
     AddRemote {
         path: String,
         name: String,
@@ -428,6 +438,8 @@ fn execute(request: Request) -> Result<(), String> {
             start,
             switch,
         } => rift_core::create_branch(path, &name, &start, switch),
+        Request::RenameBranch { path, old, new } => rift_core::rename_branch(path, &old, &new),
+        Request::DeleteBranch { path, name, force } => rift_core::delete_branch(path, &name, force),
         Request::AddRemote { path, name, url } => rift_core::add_remote(path, &name, &url),
         Request::RemoveRemote { path, name } => rift_core::remove_remote(path, &name),
         Request::CreateTag {
