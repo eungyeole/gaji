@@ -61,7 +61,7 @@ h1 { max-width: 960px; margin: 0 auto; font-size: clamp(50px,6.8vw,84px); font-w
 .orb-two { bottom: -24px; left: 12%; width: 210px; height: 210px; background: rgba(255,255,255,.07); }
 
 .product-shot { position: relative; z-index: 2; overflow: hidden; margin: 0; border: 1px solid var(--strong-line); border-radius: 0; background: #171922; box-shadow: none; }
-.product-shot img { width: 100%; height: auto; display: block; }
+.product-shot img { width: 100%; height: auto; display: block; filter: grayscale(.24) saturate(.68) contrast(1.03); }
 .modified { color: #ff9f0a; } .added { color: var(--green); }
 
 .builders { overflow: hidden; padding: 64px 0 72px; text-align: center; }
