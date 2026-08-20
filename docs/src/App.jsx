@@ -30,7 +30,7 @@ function AppPreview() {
 }
 
 function Hero() {
-  return <section className="hero shell"><h1>Native<br /><em>throughout.</em></h1><p className="lede">SwiftUI, AppKit, and Liquid Glass. Rift looks and behaves like it belongs.</p><div className="actions"><a className="button primary" href={downloadPage}>Download</a></div><p className="availability">macOS 26+ · Apple silicon and Intel</p><AppPreview /></section>;
+  return <section className="hero shell"><h1>Native throughout.</h1><p className="lede">Liquid Glass. Light. Fast.</p><div className="actions"><a className="button primary" href={downloadPage}>Download</a></div><p className="availability">macOS 26+ · Apple silicon and Intel</p><AppPreview /></section>;
 }
 
 function Builders() {
@@ -39,10 +39,10 @@ function Builders() {
 }
 
 function Experience() {
-  return <section className="section shell" id="experience"><div className="heading"><p className="eyebrow">Rift</p><h2>Everything in its place.</h2></div><div className="story-grid">
-    <article className="story-card story-wide"><div><p className="story-kicker">History</p><h3>A clear graph.<br />Nothing else.</h3></div><div className="mini-graph" aria-hidden="true"><i /><i /><i /><i /><span>Ship the new inspector</span><span>Refine the diff experience</span><span>Bring changes together</span><span>Start with a clean foundation</span></div></article>
-    <article className="story-card"><div className="change-stack"><span><i className="modified">M</i> ContentView.swift <b>+</b></span><span><i className="added">+</i> Inspector.swift <b>+</b></span><span><i>−</i> LegacyView.swift <b>+</b></span></div><div><p className="story-kicker">Changes</p><h3>Review.<br />Stage. Commit.</h3></div></article>
-    <article className="story-card"><div className="workflow-list"><span>Rebase</span><span>Cherry-pick</span><span>Conflicts</span><span>Worktrees</span><span>Stashes</span><span>Submodules</span></div><div><p className="story-kicker">More</p><h3>There when<br />you need it.</h3></div></article>
+  return <section className="section shell" id="experience"><div className="heading"><p className="eyebrow">Why Rift</p><h2>Everything in its place.</h2><p>Rift uses the Mac’s own interface instead of carrying a browser with it.</p></div><div className="story-grid">
+    <article className="story-card"><p className="story-kicker">Native UI</p><h3>Made of macOS.</h3><p>System controls, menus, shortcuts, and window behavior feel familiar from the first click.</p></article>
+    <article className="story-card"><p className="story-kicker">Liquid Glass</p><h3>Part of the system.</h3><p>Native materials bring depth where it helps, without adding another visual language.</p></article>
+    <article className="story-card"><p className="story-kicker">Light &amp; fast</p><h3>Less between you and Git.</h3><p>No embedded browser. Less overhead. A compact app backed by a fast Rust core.</p></article>
   </div></section>;
 }
 

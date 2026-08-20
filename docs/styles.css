@@ -40,7 +40,6 @@ a { color: inherit; text-decoration: none; }
 .eyebrow { margin: 0 0 16px; color: var(--secondary); font-size: 12px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; }
 h1, .heading h2 { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif; }
 h1 { max-width: 960px; margin: 0 auto; font-size: clamp(50px,6.8vw,84px); font-weight: 700; line-height: 1; letter-spacing: -.06em; }
-h1 em { color: #b8b8c0; font-style: normal; }
 .lede { max-width: 650px; margin: 24px auto 0; color: var(--secondary); font-size: clamp(18px,2vw,21px); line-height: 1.48; letter-spacing: -.025em; }
 .actions { display: flex; justify-content: center; gap: 10px; margin-top: 32px; }
 .button { min-height: 44px; padding: 0 20px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--strong-line); border-radius: 0; background: transparent; font-size: 12px; font-weight: 650; letter-spacing: .05em; text-transform: uppercase; transition: transform 100ms ease-out, background 140ms ease-out, border-color 140ms ease-out; }
@@ -81,28 +80,15 @@ h1 em { color: #b8b8c0; font-style: normal; }
 .section { padding: 96px 0; border-top: 1px solid var(--strong-line); }
 .heading { max-width: 680px; }
 .heading h2 { margin: 0; font-size: clamp(38px,5vw,62px); font-weight: 680; line-height: 1.04; letter-spacing: -.05em; }
+.heading > p:last-child { margin: 22px 0 0; color: var(--secondary); font-size: 18px; line-height: 1.55; }
 footer { min-height: 100px; display: flex; align-items: center; gap: 24px; border-top: 1px solid var(--line); color: var(--secondary); font-size: 12px; } footer p { margin-right: auto; } footer a:last-child:hover { color: var(--text); }
 
-.story-grid { margin-top: 56px; display: grid; grid-template-columns: repeat(2,1fr); gap: 0; border-top: 1px solid var(--strong-line); border-left: 1px solid var(--strong-line); }
-.story-card { min-height: 400px; padding: 36px; display: flex; flex-direction: column; justify-content: space-between; overflow: hidden; border: 0; border-right: 1px solid var(--strong-line); border-bottom: 1px solid var(--strong-line); border-radius: 0; background: transparent; }
-.story-card.story-wide { min-height: 370px; grid-column: 1/-1; flex-direction: row; align-items: center; gap: 64px; }
-.story-card > div { position: relative; z-index: 1; }
-.story-card h3 { margin: 8px 0 14px; font-size: clamp(28px,3.5vw,44px); font-weight: 650; line-height: 1.05; letter-spacing: -.045em; }
+.story-grid { margin-top: 56px; display: grid; grid-template-columns: repeat(3,1fr); border-top: 1px solid var(--strong-line); border-left: 1px solid var(--strong-line); }
+.story-card { min-height: 300px; padding: 34px; display: flex; flex-direction: column; border-right: 1px solid var(--strong-line); border-bottom: 1px solid var(--strong-line); }
+.story-card h3 { margin: 16px 0 20px; font-size: clamp(27px,3vw,38px); font-weight: 650; line-height: 1.05; letter-spacing: -.045em; }
 .story-card p { max-width: 480px; margin: 0; color: var(--secondary); font-size: 15px; }
+.story-card > p:last-child { margin-top: auto; line-height: 1.55; }
 .story-card .story-kicker { color: #b8b8c0; font-size: 12px; font-weight: 650; letter-spacing: .04em; text-transform: uppercase; }
-.mini-graph { width: min(48%,470px); padding: 22px 24px; display: grid; grid-template-columns: 32px 1fr; align-items: center; gap: 0 14px; border-block: 1px solid var(--strong-line); border-radius: 0; background: transparent; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
-.mini-graph::before { position: absolute; top: 28px; bottom: 28px; left: 39px; width: 2px; content: ""; background: #8e8e93; }
-.mini-graph i { z-index: 1; width: 14px; height: 14px; margin: 13px 0; border: 3px solid #252832; border-radius: 50%; background: #c7c7cc; box-shadow: 0 0 0 2px #8e8e93; }
-.mini-graph i:nth-of-type(2) { background: #8e8e93; box-shadow: 0 0 0 2px #636366; }
-.mini-graph span { overflow: hidden; color: #e5e5ea; font-size: 13px; font-weight: 560; text-overflow: ellipsis; white-space: nowrap; }
-.change-stack { margin: 24px 0 36px; padding: 0; display: grid; gap: 0; border-top: 1px solid var(--strong-line); border-radius: 0; background: transparent; box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
-.change-stack span { height: 46px; padding: 0 4px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--line); border-radius: 0; color: #d8d8de; font-size: 12px; }
-.change-stack span:first-child { background: transparent; color: #fff; }
-.change-stack i { width: 14px; color: #ff453a; font-style: normal; font-weight: 700; text-align: center; }
-.change-stack i.added { color: var(--green); } .change-stack i.modified { color: #ff9f0a; } .change-stack b { margin-left: auto; font-size: 15px; }
-.workflow-list { margin: 24px 0 36px; display: grid; grid-template-columns: repeat(2,1fr); align-content: flex-start; border-top: 1px solid var(--strong-line); }
-.workflow-list span { padding: 12px 4px; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; color: #d8d8de; background: transparent; font-size: 12px; font-weight: 560; }
-.workflow-list span:nth-child(even) { padding-left: 18px; border-left: 1px solid var(--line); }
 
 .download-page { min-height: calc(100vh - 164px); }
 .download-hero { padding: 96px 0 56px; }
@@ -119,8 +105,7 @@ footer { min-height: 100px; display: flex; align-items: center; gap: 24px; borde
 .install-note { margin-top: 22px; color: var(--tertiary); font-size: 11px; }
 
 @media (max-width: 900px) {
-  .story-card.story-wide { align-items: stretch; flex-direction: column; }
-  .mini-graph { width: 100%; max-width: none; }
+  .story-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 620px) {
   .shell { width: calc(100% - 28px); } .nav { height: 54px; }
@@ -128,8 +113,8 @@ footer { min-height: 100px; display: flex; align-items: center; gap: 24px; borde
   .actions { flex-direction: column; }
   .section { padding: 80px 0; }
   .preview-stage { margin-top: 50px; }
-  .story-grid { margin-top: 42px; grid-template-columns: 1fr; }
-  .story-card,.story-card.story-wide { min-height: 390px; padding: 24px; grid-column: auto; }
+  .story-grid { margin-top: 42px; }
+  .story-card { min-height: 260px; padding: 24px; }
   .builders { padding: 58px 0 64px; }
   .download-hero { padding: 80px 0 50px; }
   .platform-downloads { grid-template-columns: 1fr; }
