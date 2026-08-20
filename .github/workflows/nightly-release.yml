@@ -27,40 +27,14 @@ jobs:
         run: |
           echo "version=0.1.0" >> "$GITHUB_OUTPUT"
           echo "build=${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
-      - name: Import Developer ID certificate
-        env:
-          CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
-          CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
-        run: |
-          test -n "$CERTIFICATE_P12"
-          keychain="$RUNNER_TEMP/rift-signing.keychain-db"
-          password="$(openssl rand -hex 24)"
-          echo "$CERTIFICATE_P12" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
-          security create-keychain -p "$password" "$keychain"
-          security unlock-keychain -p "$password" "$keychain"
-          security import "$RUNNER_TEMP/certificate.p12" -P "$CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$password" "$keychain"
-          security list-keychains -d user -s "$keychain" login.keychain-db
-      - name: Package universal macOS app
+      - name: Package universal macOS DMG
         env:
           RIFT_MACOS_UNIVERSAL: 1
           RIFT_REQUIRE_UPDATE_SIGNING: 1
           RIFT_VERSION: ${{ steps.version.outputs.version }}
           RIFT_BUILD_NUMBER: ${{ steps.version.outputs.build }}
-          RIFT_CODESIGN_IDENTITY: Developer ID Application
           SPARKLE_PUBLIC_ED_KEY: ${{ secrets.SPARKLE_PUBLIC_ED_KEY }}
         run: scripts/package-macos.sh
-      - name: Notarize and staple
-        env:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
-        run: |
-          xcrun notarytool submit dist/macos/Rift-macOS.zip --apple-id "$APPLE_ID" \
-            --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD" --wait
-          xcrun stapler staple dist/macos/Rift.app
-          rm dist/macos/Rift-macOS.zip
-          ditto -c -k --sequesterRsrc --keepParent dist/macos/Rift.app dist/macos/Rift-macOS.zip
       - name: Generate signed Sparkle appcast
         env:
           SPARKLE_PRIVATE_ED_KEY: ${{ secrets.SPARKLE_PRIVATE_ED_KEY }}
@@ -78,7 +52,7 @@ jobs:
         with:
           name: macos-release
           path: |
-            dist/macos/Rift-macOS.zip
+            dist/macos/Rift-macOS.dmg
             dist/macos/appcast.xml
           if-no-files-found: error
 

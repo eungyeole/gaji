@@ -6,8 +6,9 @@ package_path="$project_root/apps/macos"
 output_root="$project_root/dist/macos"
 app_bundle="$output_root/Rift.app"
 info_plist="$app_bundle/Contents/Info.plist"
+dmg_root="$output_root/dmg-root"
 
-rm -rf "$app_bundle" "$output_root/Rift-macOS.zip"
+rm -rf "$app_bundle" "$dmg_root" "$output_root/Rift-macOS.dmg" "$output_root/Rift-macOS.zip"
 
 if [ "${RIFT_MACOS_UNIVERSAL:-0}" = "1" ]; then
     rustup target add aarch64-apple-darwin x86_64-apple-darwin
@@ -50,11 +51,11 @@ elif [ "${RIFT_REQUIRE_UPDATE_SIGNING:-0}" = "1" ]; then
     exit 1
 fi
 
-if [ -n "${RIFT_CODESIGN_IDENTITY:-}" ]; then
-    codesign --force --deep --options runtime --timestamp --sign "$RIFT_CODESIGN_IDENTITY" "$app_bundle"
-else
-    codesign --force --deep --sign - "$app_bundle"
-fi
+codesign --force --deep --sign - "$app_bundle"
 
 codesign --verify --deep --strict "$app_bundle"
-ditto -c -k --sequesterRsrc --keepParent "$app_bundle" "$output_root/Rift-macOS.zip"
+mkdir -p "$dmg_root"
+ditto "$app_bundle" "$dmg_root/Rift.app"
+ln -s /Applications "$dmg_root/Applications"
+hdiutil create -volname Rift -srcfolder "$dmg_root" -ov -format UDZO "$output_root/Rift-macOS.dmg"
+rm -rf "$dmg_root"

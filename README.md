@@ -47,7 +47,7 @@ cargo build -p rift-ffi --release
 swift run --package-path apps/macos RiftMac
 ```
 
-To produce an ad-hoc signed `.app` bundle and ZIP:
+To produce an ad-hoc signed `.app` bundle and DMG:
 
 ```sh
 ./scripts/package-macos.sh
@@ -93,24 +93,22 @@ Sharing the engine keeps operation semantics consistent. Each interface remains 
 ## Nightly releases and in-app updates
 
 Pushes to `master` refresh one rolling `nightly` prerelease instead of creating
-an unlimited release history. It contains a universal macOS archive, Windows
+an unlimited release history. It contains a universal macOS DMG, Windows
 x64/arm64 archives, and a signed Sparkle appcast. Windows archives are manual
 downloads for now; the Windows client does not claim self-update support.
 
 Rift for macOS uses Sparkle 2.9.4. It checks the HTTPS feed daily and provides
 **Rift > Check for Updates…**. Sparkle downloads the selected update, verifies
-its Ed25519 and Apple code signatures, replaces the installed app, and relaunches
-it. Published builds require these Actions secrets:
+its Ed25519 signature, replaces the installed app, and relaunches it. Published
+builds currently use ad-hoc code signing and require these Actions secrets:
 
-- `MACOS_CERTIFICATE_P12`: base64 Developer ID Application `.p12`
-- `MACOS_CERTIFICATE_PASSWORD`: certificate password
-- `APPLE_ID`, `APPLE_TEAM_ID`, `APPLE_APP_PASSWORD`: notarization credentials
 - `SPARKLE_PUBLIC_ED_KEY`: public key printed by Sparkle `generate_keys`
 - `SPARKLE_PRIVATE_ED_KEY`: exported Ed25519 private key contents
 
 The release workflow has only `contents: write` permission. Never commit private
-keys or Apple credentials. It intentionally fails rather than publish an ad-hoc
-signed or unsigned update.
+keys. Because the app is not Developer ID signed or notarized, macOS shows a
+Gatekeeper warning on first launch; users must explicitly choose **Open** from
+Finder's context menu. A future Developer ID release can remove this limitation.
 
 ## Roadmap
 
