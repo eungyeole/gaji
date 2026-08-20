@@ -1257,7 +1257,6 @@ private struct StashFileRow: View {
         }
         .contentShape(Rectangle())
         .onTapGesture {
-            isHovering = true
             isSelected ? repository.closeFileDetails() : repository.selectStashFile(change)
         }
         .onContinuousHover { phase in
@@ -1290,7 +1289,6 @@ private struct CommitFileRow: View {
         }
         .contentShape(Rectangle())
         .onTapGesture {
-            isHovering = true
             isSelected ? repository.closeFileDetails() : repository.selectCommitFile(change)
         }
         .onContinuousHover { phase in
@@ -1403,7 +1401,6 @@ private struct ChangeFileRow: View {
         }
         .contentShape(Rectangle())
         .onTapGesture {
-            isHovering = true
             isSelected ? repository.closeFileDetails() : repository.select(change, staged: staged)
         }
         .onContinuousHover { phase in
