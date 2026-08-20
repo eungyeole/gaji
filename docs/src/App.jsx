@@ -14,7 +14,7 @@ const companies = {
 const builders = [["Google", "Samsung", "Apple", "Tesla", "Netflix", "LG", "SpaceX"], ["SpaceX", "LG", "Netflix", "Tesla", "Apple", "Samsung", "Google"]];
 
 function Mark() {
-  return <svg viewBox="0 0 40 40" aria-hidden="true"><defs><linearGradient id="rift-face" x1="8" y1="5" x2="30" y2="35" gradientUnits="userSpaceOnUse"><stop stopColor="#fff" /><stop offset="1" stopColor="#8e8e93" /></linearGradient></defs><path d="M19 3.5 5.5 10.8v18.4L19 36.5l-2.4-9.2 3.8-5.1-4.6-4.1 3.2-5.4Z" fill="url(#rift-face)" /><path d="m23 4.8 11.5 6.3v17.8L23 35.2l-2-7.8 4.3-5.7-4.2-4.2 3.5-5.8Z" fill="#5f6065" /><path d="m30.2 9.2 5.4-3.1v7Z" fill="#c7c7cc" /></svg>;
+  return <svg viewBox="0 0 40 40" aria-hidden="true"><defs><linearGradient id="rift-face" x1="8" y1="5" x2="31" y2="35" gradientUnits="userSpaceOnUse"><stop stopColor="#fff" /><stop offset="1" stopColor="#77787d" /></linearGradient><mask id="rift-cut"><path d="M20 3.5C29.8 3.5 36 10.1 36 19.7 36 29.4 29.5 36.5 19.8 36.5 10.2 36.5 4 30 4 20.2 4 10.8 10.4 3.5 20 3.5Z" fill="#fff" /><path d="M11.5 5.5c7 7.2 3.9 12 10.1 16.6 5.2 3.9 2.3 8.5 7.3 13.7M21.4 22.1c5.3-1.4 8.3-5.2 8.8-10.3" fill="none" stroke="#000" strokeWidth="3" strokeLinecap="round" /></mask></defs><rect x="4" y="3.5" width="32" height="33" fill="url(#rift-face)" mask="url(#rift-cut)" /></svg>;
 }
 
 function Brand({ compact = false }) {
