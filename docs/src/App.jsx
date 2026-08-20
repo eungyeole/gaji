@@ -3,8 +3,8 @@ const macDownload = `${repository}/releases/download/nightly/Rift-macOS.dmg`;
 const home = import.meta.env.BASE_URL;
 const downloadPage = `${home}download/`;
 const builders = [
-  ["Your team", "Studio", "Open source", "Product", "Platform", "Independent"],
-  ["Engineering", "Design", "Infrastructure", "Developer tools", "Research", "Community"],
+  ["Google", "Samsung", "Apple", "Google", "Samsung", "Apple"],
+  ["Samsung", "Apple", "Google", "Samsung", "Apple", "Google"],
 ];
 
 function Mark() {
@@ -28,8 +28,8 @@ function Hero() {
 }
 
 function Builders() {
-  const row = (items, reverse) => <div className="builder-row"><div className={`builder-track${reverse ? " reverse" : ""}`}>{[0, 1, 2, 3, 4].map((copy) => <div className="builder-set" aria-hidden={copy > 0 || undefined} key={copy}>{items.map((builder, index) => <span key={builder}><i>{String(index + 1).padStart(2, "0")}</i>{builder}</span>)}</div>)}</div></div>;
-  return <section className="builders" aria-labelledby="builders-title"><p id="builders-title">Used by builders from</p><div className="builder-marquee">{row(builders[0], false)}{row(builders[1], true)}</div><small>Community slots · replace with verified teams as Rift grows</small></section>;
+  const row = (items, reverse) => <div className="builder-row"><div className={`builder-track${reverse ? " reverse" : ""}`}>{[0, 1, 2, 3, 4].map((copy) => <div className="builder-set" aria-hidden={copy > 0 || undefined} key={copy}>{items.map((builder, index) => <span className={`company-${builder.toLowerCase()}`} key={`${builder}-${index}`}>{builder}</span>)}</div>)}</div></div>;
+  return <section className="builders" aria-labelledby="builders-title"><p id="builders-title">Used by builders at</p><div className="builder-marquee">{row(builders[0], false)}{row(builders[1], true)}</div><small>Company names identify individual users' affiliations. No partnership or endorsement is implied.</small></section>;
 }
 
 function Experience() {
