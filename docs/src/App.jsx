@@ -30,7 +30,7 @@ function AppPreview() {
 }
 
 function Hero() {
-  return <section className="hero shell"><h1>Native throughout.</h1><p className="lede">Liquid Glass. Small footprint. Native speed.</p><div className="actions"><a className="button hero-download" href={downloadPage}>Download for macOS <span aria-hidden="true">↓</span></a></div><p className="availability">macOS 26+ · Apple silicon and Intel</p><AppPreview /></section>;
+  return <section className="hero shell"><h1>Native throughout.</h1><p className="lede">Liquid Glass. Small footprint. Native speed.</p><div className="actions"><a className="button hero-download" href={downloadPage}>Download for macOS <span aria-hidden="true"><img src={companies.Apple} alt="" /></span></a></div><p className="availability">macOS 26+ · Apple silicon and Intel</p><AppPreview /></section>;
 }
 
 function Builders() {
