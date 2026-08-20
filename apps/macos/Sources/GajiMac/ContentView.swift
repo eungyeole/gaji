@@ -1542,7 +1542,7 @@ private struct CommitList: View {
         let laneCount = rows.map { max($0.topLanes.count, $0.bottomLanes.count) }.max() ?? 1
         let laneSpacing = laneCount > 1 ? min(16, 104 / CGFloat(laneCount - 1)) : 16
 
-        List(rows, selection: $selection) { row in
+        List(rows, selection: selection) { row in
             let commit = row.commit
             HStack(spacing: 8) {
                 CommitReferences(references: commit.references)
