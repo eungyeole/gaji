@@ -64,7 +64,7 @@ cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
 ```
 
-Pushes to `master` refresh the rolling nightly release. The macOS app checks its signed Sparkle feed daily and also exposes **Gaji → Check for Updates…**.
+Pushes to `master` refresh the rolling nightly release. Adding the Sparkle signing secrets enables the signed update feed and **Gaji → Check for Updates…** flow; DMG releases remain available without them.
 
 </details>
 

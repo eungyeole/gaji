@@ -32,6 +32,18 @@ mkdir -p "$app_bundle/Contents/MacOS" "$app_bundle/Contents/Resources" "$app_bun
 ditto "$binary_path/GajiMac" "$app_bundle/Contents/MacOS/GajiMac"
 ditto "$package_path/Resources/Info.plist" "$info_plist"
 
+iconset="$output_root/GajiIcon.iconset"
+mkdir -p "$iconset"
+for size in 16 32 128 256 512; do
+    sips -z "$size" "$size" "$package_path/Resources/GajiIcon.png" \
+        --out "$iconset/icon_${size}x${size}.png" >/dev/null
+    double_size=$((size * 2))
+    sips -z "$double_size" "$double_size" "$package_path/Resources/GajiIcon.png" \
+        --out "$iconset/icon_${size}x${size}@2x.png" >/dev/null
+done
+iconutil -c icns "$iconset" -o "$app_bundle/Contents/Resources/GajiIcon.icns"
+rm -rf "$iconset"
+
 sparkle_framework=$(find "$package_path/.build/artifacts" -type d -name Sparkle.framework -print -quit)
 if [ -z "$sparkle_framework" ]; then
     echo "Sparkle.framework was not found in SwiftPM artifacts" >&2

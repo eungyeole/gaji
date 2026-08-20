@@ -8,6 +8,8 @@
     <string>GajiMac</string>
     <key>CFBundleIdentifier</key>
     <string>dev.eungyeole.gaji</string>
+    <key>CFBundleIconFile</key>
+    <string>GajiIcon</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>

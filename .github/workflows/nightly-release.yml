@@ -19,6 +19,9 @@ env:
 jobs:
   macos:
     runs-on: macos-26-intel
+    env:
+      SPARKLE_PUBLIC_ED_KEY: ${{ secrets.SPARKLE_PUBLIC_ED_KEY }}
+      SPARKLE_PRIVATE_ED_KEY: ${{ secrets.SPARKLE_PRIVATE_ED_KEY }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -30,16 +33,12 @@ jobs:
       - name: Package universal macOS DMG
         env:
           GAJI_MACOS_UNIVERSAL: 1
-          GAJI_REQUIRE_UPDATE_SIGNING: 1
           GAJI_VERSION: ${{ steps.version.outputs.version }}
           GAJI_BUILD_NUMBER: ${{ steps.version.outputs.build }}
-          SPARKLE_PUBLIC_ED_KEY: ${{ secrets.SPARKLE_PUBLIC_ED_KEY }}
         run: scripts/package-macos.sh
       - name: Generate signed Sparkle appcast
-        env:
-          SPARKLE_PRIVATE_ED_KEY: ${{ secrets.SPARKLE_PRIVATE_ED_KEY }}
+        if: env.SPARKLE_PUBLIC_ED_KEY != '' && env.SPARKLE_PRIVATE_ED_KEY != ''
         run: |
-          test -n "$SPARKLE_PRIVATE_ED_KEY"
           curl --fail --location --retry 3 \
             "https://github.com/sparkle-project/Sparkle/releases/download/${SPARKLE_VERSION}/Sparkle-${SPARKLE_VERSION}.tar.xz" \
             -o "$RUNNER_TEMP/Sparkle.tar.xz"
@@ -54,9 +53,10 @@ jobs:
           path: |
             dist/macos/Gaji-macOS.dmg
             dist/macos/appcast.xml
-          if-no-files-found: error
+          if-no-files-found: warn
 
   windows:
+    if: ${{ false }} # Temporarily paused while the Windows client is in preview.
     runs-on: windows-2025-vs2026
     steps:
       - uses: actions/checkout@v4
@@ -73,7 +73,7 @@ jobs:
           if-no-files-found: error
 
   publish:
-    needs: [macos, windows]
+    needs: macos
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
