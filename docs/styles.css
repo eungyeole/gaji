@@ -70,7 +70,7 @@ h1 em { color: #b8b8c0; font-style: normal; }
 .builder-track.reverse { animation-name: marquee-reverse; animation-duration: 32s; }
 .builder-set { display: flex; flex: 0 0 auto; }
 .builder-set span { width: 220px; min-height: 82px; padding: 0 18px; display: flex; flex: 0 0 auto; align-items: center; justify-content: center; gap: 11px; border-left: 1px solid var(--line); color: #d1d1d6; }
-.builder-set img { width: auto; max-width: 112px; height: 27px; object-fit: contain; filter: grayscale(1) brightness(0) invert(.82); }
+.builder-set img { width: auto; max-width: 112px; height: 27px; object-fit: contain; }
 .builder-set img[alt="Apple"] { height: 30px; }
 .builder-set img[alt="LG"] { height: 31px; }
 .builders > small { margin-top: 18px; display: block; color: var(--tertiary); font-size: 10px; }
