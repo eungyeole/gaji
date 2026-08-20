@@ -5,6 +5,8 @@
 DerivedData/
 .DS_Store
 /dist
+docs/node_modules/
+docs/dist/
 apps/macos/.build/
 apps/windows/bin/
 apps/windows/obj/
