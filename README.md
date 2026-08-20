@@ -3,7 +3,7 @@
   <h1>Rift</h1>
   <p><strong>Native throughout.</strong></p>
   <p>Liquid Glass. Small footprint. Native speed.</p>
-  <p><a href="https://github.com/eungyeole/rift/releases/download/nightly/Rift-macOS.dmg">Download for macOS</a> · <a href="https://eungyeole.github.io/rift/">Website</a> · <a href="https://github.com/eungyeole/rift/releases">Releases</a></p>
+  <p><a href="https://github.com/eungyeole/rift/releases/download/nightly/Rift-macOS.dmg">Download for macOS</a> · <a href="https://rift.eungyeole.com/">Website</a> · <a href="https://github.com/eungyeole/rift/releases">Releases</a></p>
 </div>
 
 <br>
