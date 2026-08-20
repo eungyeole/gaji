@@ -1244,6 +1244,41 @@ private struct FileChangeRowContent<Trailing: View>: View {
     }
 }
 
+private struct FileRowHoverTracker: NSViewRepresentable {
+    @Binding var isHovering: Bool
+
+    func makeNSView(context: Context) -> TrackingView {
+        let view = TrackingView()
+        view.onHover = { isHovering = $0 }
+        return view
+    }
+
+    func updateNSView(_ view: TrackingView, context: Context) {
+        view.onHover = { isHovering = $0 }
+    }
+
+    final class TrackingView: NSView {
+        var onHover: (Bool) -> Void = { _ in }
+        private var area: NSTrackingArea?
+
+        override func updateTrackingAreas() {
+            if let area { removeTrackingArea(area) }
+            let area = NSTrackingArea(
+                rect: .zero,
+                options: [.mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
+                owner: self
+            )
+            addTrackingArea(area)
+            self.area = area
+            super.updateTrackingAreas()
+        }
+
+        override func mouseEntered(with event: NSEvent) { onHover(true) }
+        override func mouseExited(with event: NSEvent) { onHover(false) }
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    }
+}
+
 private struct StashFileRow: View {
     @Environment(RepositoryStore.self) private var repository
     let change: CoreCommitFileChange
@@ -1262,11 +1297,11 @@ private struct StashFileRow: View {
                 .foregroundStyle(.tertiary)
                 .opacity(isHovering ? 1 : 0)
         }
+        .background(FileRowHoverTracker(isHovering: $isHovering))
         .contentShape(Rectangle())
         .onTapGesture {
             isSelected ? repository.closeFileDetails() : repository.selectStashFile(change)
         }
-        .onHover { isHovering = $0 }
         .help(change.path)
     }
 }
@@ -1289,11 +1324,11 @@ private struct CommitFileRow: View {
                 .foregroundStyle(.tertiary)
                 .opacity(isHovering ? 1 : 0)
         }
+        .background(FileRowHoverTracker(isHovering: $isHovering))
         .contentShape(Rectangle())
         .onTapGesture {
             isSelected ? repository.closeFileDetails() : repository.selectCommitFile(change)
         }
-        .onHover { isHovering = $0 }
         .help(change.path)
     }
 }
@@ -1396,11 +1431,11 @@ private struct ChangeFileRow: View {
             .allowsHitTesting(isHovering)
             .help(staged ? "Unstage file" : "Stage file")
         }
+        .background(FileRowHoverTracker(isHovering: $isHovering))
         .contentShape(Rectangle())
         .onTapGesture {
             isSelected ? repository.closeFileDetails() : repository.select(change, staged: staged)
         }
-        .onHover { isHovering = $0 }
         .help(change.path)
         .contextMenu {
             Button(staged ? "Unstage File" : "Stage File") {
