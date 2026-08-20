@@ -3,7 +3,7 @@ const download = `${repository}/releases/download/nightly/Rift-macOS.dmg`;
 const builders = ["Your team", "Studio", "Open source", "Product", "Platform", "Independent"];
 
 function Mark() {
-  return <svg viewBox="0 0 36 36" aria-hidden="true"><defs><linearGradient id="mark" x1="7" y1="5" x2="29" y2="31" gradientUnits="userSpaceOnUse"><stop stopColor="#76dcff" /><stop offset=".52" stopColor="#0a84ff" /><stop offset="1" stopColor="#a77bff" /></linearGradient></defs><path d="M9 30V6h9.5C24 6 27 8.8 27 13.4s-3 7.5-8.5 7.5H9" fill="none" stroke="url(#mark)" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" /><path d="m18.5 20.9 9 9.1" fill="none" stroke="url(#mark)" strokeWidth="3.4" strokeLinecap="round" /><circle cx="9" cy="6" r="2" fill="#76dcff" /><circle cx="9" cy="30" r="2" fill="#0a84ff" /><circle cx="27.5" cy="30" r="2" fill="#a77bff" /></svg>;
+  return <svg viewBox="0 0 36 36" aria-hidden="true"><defs><linearGradient id="rift-left" x1="5" y1="5" x2="17" y2="31" gradientUnits="userSpaceOnUse"><stop stopColor="#76dcff" /><stop offset="1" stopColor="#0a84ff" /></linearGradient><linearGradient id="rift-right" x1="19" y1="5" x2="31" y2="31" gradientUnits="userSpaceOnUse"><stop stopColor="#0a84ff" /><stop offset="1" stopColor="#a77bff" /></linearGradient></defs><path d="M5 5h12l-3.5 7 3.5 6-5 6 3 7H5V5Z" fill="url(#rift-left)" /><path d="M31 5H19l3.5 7-3.5 6 5 6-3 7h10V5Z" fill="url(#rift-right)" /></svg>;
 }
 
 function Brand({ compact = false }) {
