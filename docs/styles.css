@@ -70,9 +70,7 @@ h1 em { color: #b8b8c0; font-style: normal; }
 .builder-track.reverse { animation-name: marquee-reverse; animation-duration: 32s; }
 .builder-set { display: flex; flex: 0 0 auto; }
 .builder-set span { width: 220px; min-height: 82px; padding: 0 18px; display: flex; flex: 0 0 auto; align-items: center; justify-content: center; border-left: 1px solid var(--line); color: #d1d1d6; }
-.company-google { font: 600 23px Arial,sans-serif; letter-spacing: -.06em; }
-.company-samsung { font: 700 18px Arial,sans-serif; letter-spacing: .08em; text-transform: uppercase; }
-.company-apple { font: 600 22px -apple-system,BlinkMacSystemFont,"SF Pro Display",sans-serif; letter-spacing: -.04em; }
+.builder-set svg { width: 28px; height: 28px; fill: currentColor; }
 .builders > small { margin-top: 18px; display: block; color: var(--tertiary); font-size: 10px; }
 
 @keyframes hero-enter { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }

@@ -1,11 +1,11 @@
+import { siApple, siGoogle, siSamsung } from "simple-icons";
+
 const repository = "https://github.com/eungyeole/rift";
 const macDownload = `${repository}/releases/download/nightly/Rift-macOS.dmg`;
 const home = import.meta.env.BASE_URL;
 const downloadPage = `${home}download/`;
-const builders = [
-  ["Google", "Samsung", "Apple", "Google", "Samsung", "Apple"],
-  ["Samsung", "Apple", "Google", "Samsung", "Apple", "Google"],
-];
+const companies = { Google: siGoogle, Samsung: siSamsung, Apple: siApple };
+const builders = [["Google", "Samsung", "Apple", "Google", "Samsung", "Apple"], ["Samsung", "Apple", "Google", "Samsung", "Apple", "Google"]];
 
 function Mark() {
   return <svg viewBox="0 0 36 36" aria-hidden="true"><defs><linearGradient id="rift-left" x1="5" y1="5" x2="17" y2="31" gradientUnits="userSpaceOnUse"><stop stopColor="#f5f5f7" /><stop offset="1" stopColor="#a1a1aa" /></linearGradient><linearGradient id="rift-right" x1="19" y1="5" x2="31" y2="31" gradientUnits="userSpaceOnUse"><stop stopColor="#c7c7cc" /><stop offset="1" stopColor="#636366" /></linearGradient></defs><path d="M5 5h12l-3.5 7 3.5 6-5 6 3 7H5V5Z" fill="url(#rift-left)" /><path d="M31 5H19l3.5 7-3.5 6 5 6-3 7h10V5Z" fill="url(#rift-right)" /></svg>;
@@ -28,8 +28,8 @@ function Hero() {
 }
 
 function Builders() {
-  const row = (items, reverse) => <div className="builder-row"><div className={`builder-track${reverse ? " reverse" : ""}`}>{[0, 1, 2, 3, 4].map((copy) => <div className="builder-set" aria-hidden={copy > 0 || undefined} key={copy}>{items.map((builder, index) => <span className={`company-${builder.toLowerCase()}`} key={`${builder}-${index}`}>{builder}</span>)}</div>)}</div></div>;
-  return <section className="builders" aria-labelledby="builders-title"><p id="builders-title">Used by builders at</p><div className="builder-marquee">{row(builders[0], false)}{row(builders[1], true)}</div><small>Company names identify individual users' affiliations. No partnership or endorsement is implied.</small></section>;
+  const row = (items, reverse) => <div className="builder-row"><div className={`builder-track${reverse ? " reverse" : ""}`}>{[0, 1, 2, 3, 4].map((copy) => <div className="builder-set" aria-hidden={copy > 0 || undefined} key={copy}>{items.map((name, index) => <span key={`${name}-${index}`}><svg viewBox="0 0 24 24" role="img" aria-label={name}><path d={companies[name].path} /></svg></span>)}</div>)}</div></div>;
+  return <section className="builders" aria-labelledby="builders-title"><p id="builders-title">Trusted by shareholders of</p><div className="builder-marquee">{row(builders[0], false)}{row(builders[1], true)}</div><small>One share still makes you an owner. Technically.</small></section>;
 }
 
 function Experience() {
