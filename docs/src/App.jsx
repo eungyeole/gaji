@@ -14,7 +14,7 @@ const companies = {
 const builders = [["Google", "Samsung", "Apple", "Tesla", "Netflix", "LG", "SpaceX"], ["SpaceX", "LG", "Netflix", "Tesla", "Apple", "Samsung", "Google"]];
 
 function Mark() {
-  return <svg viewBox="0 0 40 40" aria-hidden="true"><defs><linearGradient id="rift-left" x1="7" y1="5" x2="17" y2="35" gradientUnits="userSpaceOnUse"><stop stopColor="#fff" /><stop offset="1" stopColor="#8e8e93" /></linearGradient><linearGradient id="rift-right" x1="23" y1="5" x2="33" y2="35" gradientUnits="userSpaceOnUse"><stop stopColor="#d8d8dc" /><stop offset="1" stopColor="#636366" /></linearGradient></defs><path d="M6 5 18.5 7l-4 7.5 2.5 5-6.5 7.5 3.5 8L6 31Z" fill="url(#rift-left)" stroke="#fff" strokeOpacity=".16" strokeLinejoin="round" /><path d="m34 5-12.5 2 4 7.5-2.5 5 6.5 7.5-3.5 8 8-4Z" fill="url(#rift-right)" stroke="#fff" strokeOpacity=".1" strokeLinejoin="round" /></svg>;
+  return <svg viewBox="0 0 40 40" aria-hidden="true"><defs><linearGradient id="rift-left" x1="16" y1="5" x2="8" y2="35" gradientUnits="userSpaceOnUse"><stop stopColor="#fff" /><stop offset="1" stopColor="#8e8e93" /></linearGradient><linearGradient id="rift-right" x1="24" y1="5" x2="32" y2="35" gradientUnits="userSpaceOnUse"><stop stopColor="#d8d8dc" /><stop offset="1" stopColor="#636366" /></linearGradient></defs><path d="M15.5 5.5C9.2 9.6 6.5 14.4 6.5 20s2.7 10.4 9 14.5" fill="none" stroke="url(#rift-left)" strokeWidth="5" strokeLinecap="round" /><path d="M24.5 5.5c6.3 4.1 9 8.9 9 14.5s-2.7 10.4-9 14.5" fill="none" stroke="url(#rift-right)" strokeWidth="5" strokeLinecap="round" /></svg>;
 }
 
 function Brand({ compact = false }) {
