@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40">
+  <defs>
+    <style>.face{fill:url(#light)}@media(prefers-color-scheme:dark){.face{fill:url(#dark)}}</style>
+    <linearGradient id="light" x1="8" y1="5" x2="31" y2="35" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1d1d1f"/>
+      <stop offset="1" stop-color="#77787d"/>
+    </linearGradient>
+    <linearGradient id="dark" x1="8" y1="5" x2="31" y2="35" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#f5f5f7"/>
+      <stop offset="1" stop-color="#77787d"/>
+    </linearGradient>
+    <mask id="cut">
+      <path d="M20 3.5C29.8 3.5 36 10.1 36 19.7 36 29.4 29.5 36.5 19.8 36.5 10.2 36.5 4 30 4 20.2 4 10.8 10.4 3.5 20 3.5Z" fill="#fff"/>
+      <path d="M11.5 5.5c7 7.2 3.9 12 10.1 16.6 5.2 3.9 2.3 8.5 7.3 13.7M21.4 22.1c5.3-1.4 8.3-5.2 8.8-10.3" fill="none" stroke="#000" stroke-width="3" stroke-linecap="round"/>
+    </mask>
+  </defs>
+  <rect class="face" x="4" y="3.5" width="32" height="33" mask="url(#cut)"/>
+</svg>

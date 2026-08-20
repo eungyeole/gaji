@@ -1,129 +1,73 @@
-# Rift
+<div align="center">
+  <img src="docs/public/rift-mark.svg" width="72" height="72" alt="Rift">
+  <h1>Rift</h1>
+  <p><strong>Native throughout.</strong></p>
+  <p>Liquid Glass. Small footprint. Native speed.</p>
+  <p><a href="https://github.com/eungyeole/rift/releases/download/nightly/Rift-macOS.dmg">Download for macOS</a> · <a href="https://eungyeole.github.io/rift/">Website</a> · <a href="https://github.com/eungyeole/rift/releases">Releases</a></p>
+</div>
 
-**A native Git workspace for macOS, backed by a shared Rust core.**
+<br>
 
-Rift keeps Git history, branches, changes, stashes, and diffs in one focused desktop workspace. The macOS app uses SwiftUI and AppKit so navigation, materials, menus, keyboard behavior, and window restoration feel at home on the platform. Git behavior lives in a reusable Rust core that also powers the early Windows client and the development CLI.
+![Rift showing branches, commit history, and changed files](docs/public/rift-workspace.png)
 
-> Rift is in active development. macOS 26 is the current product focus. The Windows app is an early WinUI foundation and does not yet have feature or interface parity with macOS.
+## Less app. More Mac.
 
-[Product site](https://eungyeole.github.io/rift/) · [Product direction](docs/PRODUCT.md) · [macOS notes](apps/macos/README.md) · [Windows status](apps/windows/README.md)
+Rift is a focused Git client built with SwiftUI, AppKit, and a Rust core. It uses native macOS controls and materials instead of shipping a browser runtime, so it feels at home, starts quickly, and stays compact.
 
-## What is working
+- **Liquid Glass** — system materials, controls, menus, and window behavior.
+- **Small footprint** — a native interface with no bundled browser.
+- **Native speed** — responsive system UI backed by a fast shared Git engine.
 
-### Native macOS workspace
+## A complete Git workspace
 
-- Restore multiple repository tabs between launches.
-- Browse local and remote branches, worktrees, and stashes from the sidebar.
-- Search branches and switch branches by double-clicking.
-- Read compact, lane-based commit history with refs and author avatars.
-- Inspect commit and stash files in the inspector, then open a structured diff.
-- Stage, unstage, and discard files or individual hunks.
-- Create commits with amend, signing, and sign-off options.
-- Fetch, pull with merge/rebase/fast-forward-only strategies, and push.
-- Create, rename, switch, merge, rebase, and delete branches.
-- Run cherry-pick, revert, reset, tags, remotes, worktrees, and submodule flows.
-- Detect conflicts, choose either side, edit merge content, continue, or abort.
-- Stash, apply, pop, inspect, and drop saved work.
+History, branches, worktrees, stashes, changes, and diffs live in one window. Rift supports everyday Git work including staging individual files or hunks, commits, fetch, pull, push, merge, rebase, cherry-pick, conflict resolution, remotes, tags, worktrees, and submodules.
 
-Rift delegates Git execution to the installed `git` executable. Existing credential helpers, SSH setup, hooks, filters, and global configuration continue to work as expected.
+Repository tabs return after relaunch. Commit and stash inspection share the same file and diff experience. Existing Git credentials, SSH configuration, hooks, filters, and global settings continue to work through the installed `git` executable.
 
-### Shared engine
+> Rift currently focuses on macOS 26. The native Windows client is planned for a later release.
 
-The Rust workspace provides repository inspection and mutation through a stable C ABI. A small CLI exercises the same data model without a graphical interface. The Windows client currently supports repository opening, history, working-copy state, patches, commits, and remote synchronization while its native experience is still being developed.
+## Build
 
-## Run the macOS app
-
-Requirements:
-
-- macOS 26 or newer
-- Xcode 26 or newer with Swift 6.2
-- A stable Rust toolchain
-- Git available on `PATH`
-
-Build the native core first, then launch the Swift package:
+Requires macOS 26+, Xcode 26 with Swift 6.2, stable Rust, and Git on `PATH`.
 
 ```sh
 cargo build -p rift-ffi --release
 swift run --package-path apps/macos RiftMac
 ```
 
-To produce an ad-hoc signed `.app` bundle and DMG:
+Create an ad-hoc signed app bundle and DMG:
 
 ```sh
 ./scripts/package-macos.sh
 ```
 
-Set `RIFT_CODESIGN_IDENTITY` to a Developer ID Application identity when making a distribution build. Notarization credentials are intentionally not stored in the repository.
+The packaged preview is not notarized. On first launch, Control-click Rift in Finder and choose **Open**.
 
-## Build the shared workspace
+## Project
+
+```text
+apps/macos        SwiftUI + AppKit app
+apps/windows      WinUI preview
+crates/rift-core  Git models and workflows
+crates/rift-ffi   Native C boundary
+crates/rift-cli   Development CLI
+docs              Product site
+```
+
+The Rust engine owns Git behavior while each platform keeps its own native interface. See [macOS notes](apps/macos/README.md), [Windows status](apps/windows/README.md), or [product direction](docs/PRODUCT.md) for more detail.
+
+<details>
+<summary>Development checks</summary>
 
 ```sh
-cargo run -p rift-cli -- /path/to/a/repository
 cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
 ```
 
-The CLI prints repository metadata, working-tree changes, and recent commits as JSON. See [the Windows notes](apps/windows/README.md) for its separate toolchain and build commands.
+Pushes to `master` refresh the rolling nightly release. The macOS app checks its signed Sparkle feed daily and also exposes **Rift → Check for Updates…**.
 
-## Architecture
-
-```text
-                         installed Git
-                              │
-                     rift-core · Rust
-                repository model + workflows
-                              │
-                       rift-ffi · C ABI
-                   ┌──────────┴──────────┐
-                   │                     │
-          SwiftUI + AppKit          WinUI 3 + .NET
-              macOS 26            Windows preview
-```
-
-- [`crates/rift-core`](crates/rift-core) — Git domain models and operations
-- [`crates/rift-ffi`](crates/rift-ffi) — JSON-based native boundary and C header
-- [`crates/rift-cli`](crates/rift-cli) — development and inspection harness
-- [`apps/macos`](apps/macos) — current SwiftUI/AppKit product
-- [`apps/windows`](apps/windows) — early WinUI client
-- [`scripts`](scripts) — platform packaging scripts
-- [`docs`](docs) — product direction and GitHub Pages site
-
-Sharing the engine keeps operation semantics consistent. Each interface remains platform-native instead of sharing pixels or forcing a web UI onto the desktop.
-
-## Nightly releases and in-app updates
-
-Pushes to `master` refresh one rolling `nightly` prerelease instead of creating
-an unlimited release history. It contains a universal macOS DMG, Windows
-x64/arm64 archives, and a signed Sparkle appcast. Windows archives are manual
-downloads for now; the Windows client does not claim self-update support.
-
-Rift for macOS uses Sparkle 2.9.4. It checks the HTTPS feed daily and provides
-**Rift > Check for Updates…**. Sparkle downloads the selected update, verifies
-its Ed25519 signature, replaces the installed app, and relaunches it. Published
-builds currently use ad-hoc code signing and require these Actions secrets:
-
-- `SPARKLE_PUBLIC_ED_KEY`: public key printed by Sparkle `generate_keys`
-- `SPARKLE_PRIVATE_ED_KEY`: exported Ed25519 private key contents
-
-The release workflow has only `contents: write` permission. Never commit private
-keys. Because the app is not Developer ID signed or notarized, macOS shows a
-Gatekeeper warning on first launch; users must explicitly choose **Open** from
-Finder's context menu. A future Developer ID release can remove this limitation.
-
-## Roadmap
-
-- Stabilize and polish the macOS workspace for everyday repositories.
-- Improve performance and resilience for large histories and long-running Git operations.
-- Expand keyboard navigation, accessibility, and Git workflow ergonomics.
-- Bring the Windows client toward macOS workflow parity using native WinUI.
-- Evaluate faster read paths in the Rust core without changing Git-compatible mutation behavior.
-
-Roadmap items describe direction, not release commitments.
+</details>
 
 ## Contributing
 
-Issues and focused pull requests are welcome. Before opening a change, run the Rust test and lint commands above. macOS interface changes should also build the Swift package on macOS 26; Windows changes should build the WinUI project on a supported Windows machine.
-
-## License
-
-Rift is licensed under MIT; see the workspace metadata and distribution for details.
+Issues and focused pull requests are welcome. Rift is available under the MIT license.
