@@ -13,7 +13,9 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  RELEASE_TAG: nightly
+  RELEASE_TAG: v0.1.${{ github.run_number }}
+  RELEASE_VERSION: 0.1.${{ github.run_number }}
+  FEED_TAG: nightly
   SPARKLE_VERSION: 2.9.4
 
 jobs:
@@ -25,16 +27,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - id: version
-        shell: bash
-        run: |
-          echo "version=0.1.0" >> "$GITHUB_OUTPUT"
-          echo "build=${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
       - name: Package universal macOS DMG
         env:
           GAJI_MACOS_UNIVERSAL: 1
-          GAJI_VERSION: ${{ steps.version.outputs.version }}
-          GAJI_BUILD_NUMBER: ${{ steps.version.outputs.build }}
+          GAJI_VERSION: ${{ env.RELEASE_VERSION }}
+          GAJI_BUILD_NUMBER: ${{ github.run_number }}
         run: scripts/package-macos.sh
       - name: Generate signed Sparkle appcast
         if: env.SPARKLE_PUBLIC_ED_KEY != '' && env.SPARKLE_PRIVATE_ED_KEY != ''
@@ -80,15 +77,28 @@ jobs:
         with:
           path: release
           merge-multiple: true
-      - name: Refresh rolling prerelease
+      - name: Publish versioned prerelease and refresh update feed
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
-              --title "Gaji Nightly" --prerelease --latest=false --notes "Automated build ${GITHUB_SHA}."
+              --title "Gaji ${RELEASE_VERSION}" --prerelease --latest=false \
+              --notes "Automated build ${GITHUB_SHA}."
           else
             gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
-              --title "Gaji Nightly" --prerelease --notes "Automated build ${GITHUB_SHA}."
+              --title "Gaji ${RELEASE_VERSION}" --prerelease --latest=false \
+              --notes "Automated build ${GITHUB_SHA}."
           fi
           gh release upload "$RELEASE_TAG" release/* --repo "$GITHUB_REPOSITORY" --clobber
+
+          if gh release view "$FEED_TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release edit "$FEED_TAG" --repo "$GITHUB_REPOSITORY" \
+              --title "Gaji Nightly Feed" --prerelease --latest=false \
+              --notes "Latest automatic update feed: ${RELEASE_TAG}."
+          else
+            gh release create "$FEED_TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+              --title "Gaji Nightly Feed" --prerelease --latest=false \
+              --notes "Latest automatic update feed: ${RELEASE_TAG}."
+          fi
+          gh release upload "$FEED_TAG" release/* --repo "$GITHUB_REPOSITORY" --clobber

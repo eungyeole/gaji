@@ -64,7 +64,7 @@ cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
 ```
 
-Pushes to `master` refresh the rolling nightly release. Adding the Sparkle signing secrets enables the signed update feed and **Gaji → Check for Updates…** flow; DMG releases remain available without them.
+Pushes to `master` create a versioned prerelease and refresh the rolling nightly feed. Adding the Sparkle signing secrets enables the signed update feed and **Gaji → Check for Updates…** flow; DMG releases remain available without them.
 
 </details>
 
