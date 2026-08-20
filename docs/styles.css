@@ -63,16 +63,14 @@ h1 em { color: #b8b8c0; font-style: normal; }
 
 .builders { overflow: hidden; padding: 76px 0 84px; text-align: center; }
 .builders > p { margin: 0 0 30px; color: var(--secondary); font-size: 13px; font-weight: 580; }
-.builder-marquee { position: relative; border-block: 1px solid var(--line); background: #ececef; mask-image: linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent); -webkit-mask-image: linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent); }
+.builder-marquee { position: relative; border-block: 1px solid var(--line); mask-image: linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent); -webkit-mask-image: linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent); }
 .builder-row { overflow: hidden; }
-.builder-row + .builder-row { border-top: 1px solid rgba(0,0,0,.13); }
+.builder-row + .builder-row { border-top: 1px solid var(--line); }
 .builder-track { --builder-set-width: 1540px; width: max-content; display: flex; animation: marquee 32s linear infinite; will-change: transform; backface-visibility: hidden; }
 .builder-track.reverse { animation-name: marquee-reverse; animation-duration: 32s; }
 .builder-set { display: flex; flex: 0 0 auto; }
-.builder-set span { width: 220px; min-height: 82px; padding: 0 18px; display: flex; flex: 0 0 auto; align-items: center; justify-content: center; gap: 11px; border-left: 1px solid rgba(0,0,0,.13); }
-.builder-set img { width: auto; max-width: 112px; height: 27px; object-fit: contain; }
-.builder-set img[alt="Apple"] { height: 30px; }
-.builder-set img[alt="LG"] { height: 31px; }
+.builder-set span { width: 220px; min-height: 82px; padding: 0 18px; display: flex; flex: 0 0 auto; align-items: center; justify-content: center; gap: 11px; border-left: 1px solid var(--line); }
+.builder-set img { width: 156px; height: 40px; object-fit: contain; filter: invert(1); }
 .builders > small { margin-top: 18px; display: block; color: var(--tertiary); font-size: 10px; }
 
 @keyframes hero-enter { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
