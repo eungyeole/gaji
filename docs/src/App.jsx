@@ -1,5 +1,7 @@
 const repository = "https://github.com/eungyeole/rift";
-const download = `${repository}/releases/download/nightly/Rift-macOS.dmg`;
+const macDownload = `${repository}/releases/download/nightly/Rift-macOS.dmg`;
+const home = import.meta.env.BASE_URL;
+const downloadPage = `${home}download/`;
 const builders = [
   ["Your team", "Studio", "Open source", "Product", "Platform", "Independent"],
   ["Engineering", "Design", "Infrastructure", "Developer tools", "Research", "Community"],
@@ -10,11 +12,11 @@ function Mark() {
 }
 
 function Brand({ compact = false }) {
-  return <a className="brand" href="#top" aria-label="Rift home">{!compact && <Mark />}<span>Rift</span></a>;
+  return <a className="brand" href={home} aria-label="Rift home">{!compact && <Mark />}<span>Rift</span></a>;
 }
 
 function Navigation() {
-  return <header className="nav shell"><Brand /><nav aria-label="Primary"><a href="#experience">Experience</a><a href="#native">Why native</a><a href={repository}>GitHub</a></nav></header>;
+  return <header className="nav-shell"><div className="nav shell"><Brand /><nav aria-label="Primary"><a href={`${home}#experience`}>Experience</a><a href={`${home}#native`}>Why native</a><a href={downloadPage}>Download</a><a href={repository}>GitHub</a></nav></div></header>;
 }
 
 function AppPreview() {
@@ -22,7 +24,7 @@ function AppPreview() {
 }
 
 function Hero() {
-  return <section className="hero shell"><p className="eyebrow"><i /> Native for macOS 26</p><h1>A native Git client<br /><em>for your Mac.</em></h1><p className="lede">History, branches, changes, stashes, and diffs in one focused window—built with SwiftUI, AppKit, and Liquid Glass.</p><div className="actions"><a className="button primary" href={download}>Download for Mac</a><a className="button" href={repository}>View source</a></div><p className="availability">Nightly preview · Apple silicon and Intel · Unsigned build</p><AppPreview /><div className="trust-strip"><span><strong>48 core Git operations</strong>Implemented in the shared engine today.</span><span><strong>No account required</strong>Open a repository and start working.</span><span><strong>Open source</strong>Inspect the code and follow every change.</span></div></section>;
+  return <section className="hero shell"><p className="eyebrow"><i /> Native for macOS 26</p><h1>A native Git client<br /><em>for your Mac.</em></h1><p className="lede">History, branches, changes, stashes, and diffs in one focused window—built with SwiftUI, AppKit, and Liquid Glass.</p><div className="actions"><a className="button primary" href={downloadPage}>Download</a><a className="button" href={repository}>View source</a></div><p className="availability">Nightly preview · Apple silicon and Intel · Unsigned build</p><AppPreview /></section>;
 }
 
 function Builders() {
@@ -43,9 +45,14 @@ function NativeStory() {
 }
 
 function Closing() {
-  return <section className="closing shell"><p className="eyebrow">Rift for macOS</p><h2>Try the current preview.</h2><p>Rift is under active development. Download the nightly build or follow the project on GitHub.</p><div className="actions"><a className="button primary" href={download}>Download for Mac</a><a className="button" href={repository}>View on GitHub</a></div><p className="windows-note">Windows release planned for a later stage.</p></section>;
+  return <section className="closing shell"><p className="eyebrow">Rift preview</p><h2>Try the current build.</h2><p>Rift is under active development. Download the nightly build or follow the project on GitHub.</p><div className="actions"><a className="button primary" href={downloadPage}>Download</a><a className="button" href={repository}>View on GitHub</a></div></section>;
+}
+
+function DownloadPage() {
+  return <><Navigation /><main className="download-page"><section className="download-hero shell"><p className="eyebrow">Download Rift</p><h1>Choose your platform.</h1><p>Rift is currently available as a nightly preview.</p></section><section className="platform-downloads shell"><article><header><span>Available now</span><strong>macOS</strong></header><p>Universal build for Apple silicon and Intel.</p><dl><div><dt>Requires</dt><dd>macOS 26+</dd></div><div><dt>Format</dt><dd>DMG · unsigned preview</dd></div></dl><a className="button primary" href={macDownload}>Download DMG</a></article><article className="planned"><header><span>Planned</span><strong>Windows</strong></header><p>A native Windows release is planned for a later stage.</p><dl><div><dt>Status</dt><dd>In development</dd></div><div><dt>Availability</dt><dd>To be announced</dd></div></dl><button className="button" disabled>Coming later</button></article></section><p className="install-note shell">Because the current macOS preview is not notarized, open Rift from Finder’s context menu the first time.</p></main><footer className="shell"><Brand compact /><p>Native Git for macOS.</p><a href={repository}>GitHub</a></footer></>;
 }
 
 export default function App() {
+  if (window.location.pathname.endsWith("/download/") || window.location.pathname.endsWith("/download/index.html")) return <DownloadPage />;
   return <><Navigation /><main id="top"><Hero /><Builders /><Experience /><NativeStory /><Closing /></main><footer className="shell"><Brand compact /><p>Native Git for macOS.</p><a href={repository}>GitHub</a></footer></>;
 }
