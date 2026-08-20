@@ -10,10 +10,10 @@ let rustLibraryPath = repositoryRoot.appending(path: "target/release").path
 let package = Package(
     name: "RiftMac",
     platforms: [.macOS(.v26)],
+    products: [.executable(name: "RiftMac", targets: ["RiftMac"])],
     dependencies: [
         .package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.9.4")
     ],
-    products: [.executable(name: "RiftMac", targets: ["RiftMac"])],
     targets: [
         .systemLibrary(name: "CRift", path: "Sources/CRift"),
         .executableTarget(
