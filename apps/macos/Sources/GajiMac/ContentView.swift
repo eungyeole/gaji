@@ -1225,15 +1225,22 @@ private struct FileChangeRowContent<Trailing: View>: View {
             rowBackground,
             in: RoundedRectangle(cornerRadius: GajiUI.rowRadius)
         )
+        .overlay {
+            RoundedRectangle(cornerRadius: GajiUI.rowRadius)
+                .strokeBorder(hoverBorder, lineWidth: 1)
+        }
     }
 
     private var rowBackground: Color {
         if isSelected {
-            return Color.accentColor.opacity(
-                GajiUI.selectionOpacity + (isHovering ? GajiUI.hoverOpacity : 0)
-            )
+            return Color.accentColor.opacity(isHovering ? 0.24 : GajiUI.selectionOpacity)
         }
         return Color.primary.opacity(isHovering ? GajiUI.hoverOpacity : 0)
+    }
+
+    private var hoverBorder: Color {
+        guard isHovering else { return .clear }
+        return isSelected ? Color.accentColor.opacity(0.7) : Color.primary.opacity(0.12)
     }
 }
 
