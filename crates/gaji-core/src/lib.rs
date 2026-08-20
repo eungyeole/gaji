@@ -170,9 +170,21 @@ fn conflict_stage(root: &Path, stage: u8, file: &str) -> Result<Option<String>, 
 }
 
 pub fn cherry_pick(path: impl AsRef<Path>, revision: &str) -> Result<(), GajiError> {
+    cherry_pick_many(path, &[revision])
+}
+
+pub fn cherry_pick_many(path: impl AsRef<Path>, revisions: &[&str]) -> Result<(), GajiError> {
+    if revisions.is_empty() {
+        return Err(GajiError::GitFailed("no commits selected".to_owned()));
+    }
     let root = repository_root(path.as_ref())?;
-    let commit = resolve_commit(&root, revision)?;
-    git(&root, &["cherry-pick", &commit]).map(|_| ())
+    let commits = revisions
+        .iter()
+        .map(|revision| resolve_commit(&root, revision))
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut arguments = vec!["cherry-pick"];
+    arguments.extend(commits.iter().map(String::as_str));
+    git(&root, &arguments).map(|_| ())
 }
 
 pub fn rebase_onto(path: impl AsRef<Path>, upstream: &str) -> Result<(), GajiError> {

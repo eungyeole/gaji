@@ -94,6 +94,30 @@ fn resolves_and_continues_a_conflicting_cherry_pick() {
 }
 
 #[test]
+fn cherry_picks_multiple_commits_in_order() {
+    let repository = TestRepository::new();
+    repository.write("base\n");
+    repository.commit("base");
+    repository.git(&["checkout", "-q", "-b", "feature"]);
+    fs::write(repository.path().join("first.txt"), "first\n").unwrap();
+    repository.git(&["add", "first.txt"]);
+    repository.git(&["commit", "-q", "-m", "first"]);
+    let first = repository.git(&["rev-parse", "HEAD"]);
+    fs::write(repository.path().join("second.txt"), "second\n").unwrap();
+    repository.git(&["add", "second.txt"]);
+    repository.git(&["commit", "-q", "-m", "second"]);
+    let second = repository.git(&["rev-parse", "HEAD"]);
+    repository.git(&["checkout", "-q", "main"]);
+
+    gaji_core::cherry_pick_many(repository.path(), &[&first, &second]).unwrap();
+
+    assert_eq!(
+        repository.git(&["log", "-2", "--reverse", "--format=%s"]),
+        "first\nsecond"
+    );
+}
+
+#[test]
 fn aborts_a_conflicting_rebase() {
     let (repository, _) = diverged_repository();
     repository.git(&["checkout", "-q", "feature"]);

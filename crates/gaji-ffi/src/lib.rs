@@ -53,6 +53,10 @@ enum Request {
         path: String,
         revision: String,
     },
+    CherryPickMany {
+        path: String,
+        revisions: Vec<String>,
+    },
     Rebase {
         path: String,
         upstream: String,
@@ -520,6 +524,10 @@ fn execute(request: Request) -> Result<(), String> {
         )
         .map(|_| ()),
         Request::CherryPick { path, revision } => gaji_core::cherry_pick(path, &revision),
+        Request::CherryPickMany { path, revisions } => {
+            let revisions = revisions.iter().map(String::as_str).collect::<Vec<_>>();
+            gaji_core::cherry_pick_many(path, &revisions)
+        }
         Request::Rebase { path, upstream } => gaji_core::rebase_onto(path, &upstream),
         Request::InteractiveRebase {
             path,

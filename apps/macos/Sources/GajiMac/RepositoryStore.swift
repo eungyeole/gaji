@@ -81,6 +81,7 @@ final class RepositoryStore {
     var isBusy: Bool { busyMessage != nil }
     var pullBehavior: PullBehavior
     var selection: Commit.ID?
+    var selectedCommitIDs: Set<Commit.ID> = []
     var selectedFile: String?
     var selectedFileCommit: String?
     var selectedFileDiff = ""
@@ -273,11 +274,14 @@ final class RepositoryStore {
             if selectedFileCommit == nil, let selectedFile, !changes.contains(where: { $0.path == selectedFile }) {
                 closeFileDetails()
             }
-            if let selection, !commits.contains(where: { $0.id == selection }) {
+            let commitIDs = Set(commits.map(\.id))
+            selectedCommitIDs.formIntersection(commitIDs)
+            if let selection, !commitIDs.contains(selection) {
                 self.selection = changes.isEmpty ? commits.first?.id : nil
             } else if selection == nil, changes.isEmpty {
                 selection = commits.first?.id
             }
+            if let selection { selectedCommitIDs.insert(selection) }
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
@@ -288,6 +292,29 @@ final class RepositoryStore {
         runCore(["action": "cherryPick", "path": rootPath, "revision": commit.id])
     }
 
+    func cherryPick(_ commits: [Commit]) {
+        let revisions = commitsInReplayOrder(commits).map(\.id)
+        guard !revisions.isEmpty else { return }
+        runCore(["action": "cherryPickMany", "path": rootPath, "revisions": revisions])
+    }
+
+    func updateCommitSelection(_ ids: Set<Commit.ID>, ordered visibleIDs: [Commit.ID]) {
+        let added = ids.subtracting(selectedCommitIDs)
+        selectedCommitIDs = ids
+        if ids.isEmpty {
+            selection = nil
+        } else if added.count == 1 {
+            selection = added.first
+        } else if selection == nil || !ids.contains(selection!) {
+            selection = visibleIDs.first(where: ids.contains)
+        }
+    }
+
+    func clearCommitSelection() {
+        selectedCommitIDs = []
+        selection = nil
+    }
+
     func select(_ change: FileChange, staged: Bool? = nil) {
         guard let root else { return }
         selectedStash = nil
@@ -295,7 +322,7 @@ final class RepositoryStore {
         fileLoadTask?.cancel()
         selectedFile = change.path
         selectedFileCommit = nil
-        selection = nil
+        clearCommitSelection()
         let inspectStaged = staged ?? (change.indexStatus != " " && change.indexStatus != "?")
         selectedFileIsStaged = inspectStaged
         let rootPath = root.path()
@@ -394,7 +421,7 @@ final class RepositoryStore {
     func selectStash(_ stash: CoreStash) {
         guard let root else { return }
         commitLoadTask?.cancel()
-        selection = nil
+        clearCommitSelection()
         selectedCommitFiles = []
         closeFileDetails()
         selectedStash = stash
@@ -560,6 +587,27 @@ final class RepositoryStore {
         do {
             rebaseUpstream = name
             rebaseSteps = try CoreBridge.rebasePlan(rootPath, upstream: name)
+            showsInteractiveRebase = true
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func prepareSquash(_ selected: [Commit]) {
+        let commits = commitsInReplayOrder(selected)
+        guard commits.count > 1, let oldest = commits.first else { return }
+        do {
+            let upstream = "\(oldest.id)^"
+            let plan = try CoreBridge.rebasePlan(rootPath, upstream: upstream)
+            guard Set(plan.map(\.commit)) == Set(commits.map(\.id)) else {
+                throw CoreError.message("Squash requires contiguous commits on the current branch.")
+            }
+            rebaseUpstream = upstream
+            rebaseSteps = plan.enumerated().map { index, step in
+                var step = step
+                step.action = index == 0 ? "pick" : "squash"
+                return step
+            }
             showsInteractiveRebase = true
         } catch {
             errorMessage = error.localizedDescription
@@ -776,10 +824,15 @@ final class RepositoryStore {
     private func prepareForRepositoryTransition() {
         fileLoadTask?.cancel()
         commitLoadTask?.cancel()
-        selection = nil
+        clearCommitSelection()
         selectedCommitFiles = []
         selectedCommitFilesLoading = false
         closeStashDetails()
+    }
+
+    private func commitsInReplayOrder(_ selected: [Commit]) -> [Commit] {
+        let ids = Set(selected.map(\.id))
+        return Array(commits.filter { ids.contains($0.id) }.reversed())
     }
 
     private nonisolated static func loadFileDetails(
@@ -835,7 +888,7 @@ final class RepositoryStore {
         case "push", "pushTag": return "Pushing changes…"
         case "merge": return "Merging branches…"
         case "rebase", "interactiveRebase": return "Rebasing commits…"
-        case "cherryPick": return "Cherry-picking commit…"
+        case "cherryPick", "cherryPickMany": return "Cherry-picking commits…"
         case "revert": return "Reverting commit…"
         case "commit": return "Creating commit…"
         case "stage": return "Staging changes…"

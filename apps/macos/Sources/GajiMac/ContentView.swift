@@ -154,7 +154,7 @@ struct ContentView: View {
                                     if repository.selectedFile != nil {
                                         FileDiffView()
                                     } else {
-                                        CommitList(selection: $repository.selection)
+                                        CommitList()
                                     }
                                 }
                                 .frame(minWidth: 420, maxWidth: .infinity)
@@ -1018,12 +1018,16 @@ private struct CommitInspector: View {
         repository.commits.first { $0.id == repository.selection }
     }
 
+    private var selectedCommits: [Commit] {
+        repository.commits.filter { repository.selectedCommitIDs.contains($0.id) }
+    }
+
     var body: some View {
         VStack(spacing: GajiUI.sectionSpacing) {
             HStack {
                 Button {
                     repository.closeFileDetails()
-                    repository.selection = nil
+                    repository.clearCommitSelection()
                 } label: {
                     Label("Back to Changes", systemImage: "chevron.left")
                         .labelStyle(.iconOnly)
@@ -1034,6 +1038,19 @@ private struct CommitInspector: View {
             }
             .padding(.horizontal, 4)
             .frame(height: GajiUI.headerHeight)
+
+            if selectedCommits.count > 1 {
+                HStack {
+                    Text("\(selectedCommits.count) commits selected")
+                        .font(.subheadline.weight(.semibold))
+                    Spacer()
+                    Button("Squash…") { repository.prepareSquash(selectedCommits) }
+                    Button("Cherry-Pick") { repository.cherryPick(selectedCommits) }
+                        .buttonStyle(.glassProminent)
+                }
+                .disabled(repository.operation != nil || repository.isBusy)
+                .padding(.horizontal, 4)
+            }
 
             if let commit {
                 VStack(alignment: .leading, spacing: 6) {
@@ -1505,7 +1522,6 @@ private struct FileDiffView: View {
 
 private struct CommitList: View {
     @Environment(RepositoryStore.self) private var repository
-    @Binding var selection: Commit.ID?
 
     private var visibleRows: [CommitGraphRow] {
         let query = repository.searchText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1521,6 +1537,11 @@ private struct CommitList: View {
     var body: some View {
         @Bindable var repository = repository
         let rows = visibleRows
+        let visibleIDs = rows.map(\.id)
+        let selection = Binding<Set<Commit.ID>>(
+            get: { repository.selectedCommitIDs },
+            set: { repository.updateCommitSelection($0, ordered: visibleIDs) }
+        )
         let laneCount = rows.map { max($0.topLanes.count, $0.bottomLanes.count) }.max() ?? 1
         let laneSpacing = laneCount > 1 ? min(16, 104 / CGFloat(laneCount - 1)) : 16
 
@@ -1541,10 +1562,20 @@ private struct CommitList: View {
             .listRowInsets(EdgeInsets(top: 0, leading: 8, bottom: 0, trailing: 8))
             .listRowSeparator(.hidden)
             .contextMenu {
-                Button("Cherry-Pick \(String(commit.id.prefix(8)))") {
-                    repository.cherryPick(commit)
+                let selected = repository.selectedCommitIDs.contains(commit.id)
+                    ? rows.map(\.commit).filter { repository.selectedCommitIDs.contains($0.id) }
+                    : [commit]
+                Button(selected.count > 1 ? "Cherry-Pick \(selected.count) Commits" : "Cherry-Pick \(String(commit.id.prefix(8)))") {
+                    repository.cherryPick(selected)
                 }
                 .disabled(repository.operation != nil)
+                if selected.count > 1 {
+                    Button("Squash \(selected.count) Commits…") {
+                        repository.prepareSquash(selected)
+                    }
+                    .disabled(repository.operation != nil)
+                    Divider()
+                }
                 Button("Revert Commit") { repository.revert(commit) }
                     .disabled(repository.operation != nil)
                 Button("Create Tag…") { repository.taggingCommit = commit }
@@ -1563,7 +1594,7 @@ private struct CommitList: View {
         .scrollContentBackground(.hidden)
         .environment(\.defaultMinListRowHeight, 24)
         .searchable(text: $repository.searchText, prompt: "Search commits")
-        .task(id: selection) { repository.selectCommit(selection) }
+        .task(id: repository.selection) { repository.selectCommit(repository.selection) }
     }
 
 }
