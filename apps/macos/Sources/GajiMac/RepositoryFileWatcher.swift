@@ -17,7 +17,7 @@ final class RepositoryFileWatcher: @unchecked Sendable {
         stream = FSEventStreamCreate(
             nil,
             { _, info, count, paths, _, _ in
-                guard let info, let paths else { return }
+                guard let info else { return }
                 let watcher = Unmanaged<RepositoryFileWatcher>.fromOpaque(info).takeUnretainedValue()
                 let values = unsafeBitCast(paths, to: NSArray.self) as? [String] ?? []
                 let relevant = values.prefix(count).filter {
