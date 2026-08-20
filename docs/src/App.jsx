@@ -28,7 +28,7 @@ function Hero() {
 }
 
 function Builders() {
-  const row = (items, reverse) => <div className="builder-row"><div className={`builder-track${reverse ? " reverse" : ""}`}>{[false, true].map((duplicate) => <div className="builder-set" aria-hidden={duplicate || undefined} key={String(duplicate)}>{items.map((builder, index) => <span key={builder}><i>{String(index + 1).padStart(2, "0")}</i>{builder}</span>)}</div>)}</div></div>;
+  const row = (items, reverse) => <div className="builder-row"><div className={`builder-track${reverse ? " reverse" : ""}`}>{[0, 1, 2, 3, 4].map((copy) => <div className="builder-set" aria-hidden={copy > 0 || undefined} key={copy}>{items.map((builder, index) => <span key={builder}><i>{String(index + 1).padStart(2, "0")}</i>{builder}</span>)}</div>)}</div></div>;
   return <section className="builders" aria-labelledby="builders-title"><p id="builders-title">Used by builders from</p><div className="builder-marquee">{row(builders[0], false)}{row(builders[1], true)}</div><small>Community slots · replace with verified teams as Rift grows</small></section>;
 }
 
