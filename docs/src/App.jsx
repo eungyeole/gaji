@@ -39,10 +39,10 @@ function Builders() {
 }
 
 function Experience() {
-  return <section className="section shell" id="experience"><div className="heading"><p className="eyebrow">Why Rift</p><h2>Everything in its place.</h2><p>Rift uses the Mac’s own interface instead of carrying a browser with it.</p></div><div className="story-grid">
-    <article className="story-card"><p className="story-kicker">Native UI</p><h3>Made of macOS.</h3><p>System controls, menus, shortcuts, and window behavior feel familiar from the first click.</p></article>
-    <article className="story-card"><p className="story-kicker">Liquid Glass</p><h3>Part of the system.</h3><p>Native materials bring depth where it helps, without adding another visual language.</p></article>
-    <article className="story-card"><p className="story-kicker">Light &amp; fast</p><h3>Less between you and Git.</h3><p>No embedded browser. Less overhead. A compact app backed by a fast Rust core.</p></article>
+  return <section className="section shell" id="experience"><div className="heading"><p className="eyebrow">Why native</p><h2>Less app. More Mac.</h2><p>No bundled browser runtime—just a compact, responsive Git client built around macOS.</p></div><div className="story-grid">
+    <article className="story-card"><p className="story-kicker">Liquid Glass</p><h3>The real thing.</h3><p>System materials, controls, and window behavior make Rift feel at home on macOS.</p></article>
+    <article className="story-card"><p className="story-kicker">Small footprint</p><h3>No browser included.</h3><p>A native interface keeps the app lean and leaves more of your Mac to your work.</p></article>
+    <article className="story-card"><p className="story-kicker">Native speed</p><h3>Ready when you are.</h3><p>System UI stays responsive while a fast Rust core handles the repository underneath.</p></article>
   </div></section>;
 }
 
