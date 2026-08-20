@@ -22,7 +22,7 @@ function Brand({ compact = false }) {
 }
 
 function Navigation() {
-  return <header className="nav-shell"><div className="nav shell"><Brand /><nav aria-label="Primary"><a href={`${home}#experience`}>Experience</a><a href={`${home}#native`}>Why native</a><a href={downloadPage}>Download</a><a href={repository}>GitHub</a></nav></div></header>;
+  return <header className="nav-shell"><div className="nav shell"><Brand /><nav aria-label="Primary"><a href={downloadPage}>Download</a><a href={repository}>GitHub</a></nav></div></header>;
 }
 
 function AppPreview() {
@@ -30,7 +30,7 @@ function AppPreview() {
 }
 
 function Hero() {
-  return <section className="hero shell"><p className="eyebrow"><i /> Native for macOS 26</p><h1>A native Git client<br /><em>for your Mac.</em></h1><p className="lede">History, branches, changes, stashes, and diffs in one focused window—built with SwiftUI, AppKit, and Liquid Glass.</p><div className="actions"><a className="button primary" href={downloadPage}>Download</a><a className="button" href={repository}>View source</a></div><p className="availability">Nightly preview · Apple silicon and Intel · Unsigned build</p><AppPreview /></section>;
+  return <section className="hero shell"><p className="eyebrow"><i /> Native for macOS</p><h1>Git, at home<br /><em>on your Mac.</em></h1><p className="lede">History, changes, and branches in one focused window.</p><div className="actions"><a className="button primary" href={downloadPage}>Download</a></div><p className="availability">macOS 26+ · Apple silicon and Intel</p><AppPreview /></section>;
 }
 
 function Builders() {
@@ -39,26 +39,22 @@ function Builders() {
 }
 
 function Experience() {
-  return <section className="section shell" id="experience"><div className="heading"><p className="eyebrow">Inside Rift</p><h2>Built around real Git work.</h2><p>The interface keeps navigation, history, diffs, and the working copy connected without turning the window into a control panel.</p></div><div className="story-grid">
-    <article className="story-card story-wide"><div><p className="story-kicker">History</p><h3>A compact graph,<br />with room for the work.</h3><p>Branches, refs, authors, and changed files remain readable even when the history gets busy.</p></div><div className="mini-graph" aria-hidden="true"><i /><i /><i /><i /><span>Ship the new inspector</span><span>Refine the diff experience</span><span>Bring changes together</span><span>Start with a clean foundation</span></div></article>
-    <article className="story-card"><div className="change-stack"><span><i className="modified">M</i> ContentView.swift <b>+</b></span><span><i className="added">+</i> Inspector.swift <b>+</b></span><span><i>−</i> LegacyView.swift <b>+</b></span></div><div><p className="story-kicker">Working copy</p><h3>Review, stage,<br />and commit.</h3><p>Files and hunks move through one consistent inspector, with structured diffs in the center.</p></div></article>
-    <article className="story-card"><div className="workflow-list"><span>Rebase</span><span>Cherry-pick</span><span>Resolve conflicts</span><span>Worktrees</span><span>Stashes</span><span>Submodules</span></div><div><p className="story-kicker">Workflows</p><h3>The full toolset,<br />kept out of the way.</h3><p>Common actions stay immediate. The rest is available without competing for attention.</p></div></article>
+  return <section className="section shell" id="experience"><div className="heading"><p className="eyebrow">Rift</p><h2>Everything in its place.</h2></div><div className="story-grid">
+    <article className="story-card story-wide"><div><p className="story-kicker">History</p><h3>A clear graph.<br />Nothing else.</h3></div><div className="mini-graph" aria-hidden="true"><i /><i /><i /><i /><span>Ship the new inspector</span><span>Refine the diff experience</span><span>Bring changes together</span><span>Start with a clean foundation</span></div></article>
+    <article className="story-card"><div className="change-stack"><span><i className="modified">M</i> ContentView.swift <b>+</b></span><span><i className="added">+</i> Inspector.swift <b>+</b></span><span><i>−</i> LegacyView.swift <b>+</b></span></div><div><p className="story-kicker">Changes</p><h3>Review.<br />Stage. Commit.</h3></div></article>
+    <article className="story-card"><div className="workflow-list"><span>Rebase</span><span>Cherry-pick</span><span>Conflicts</span><span>Worktrees</span><span>Stashes</span><span>Submodules</span></div><div><p className="story-kicker">More</p><h3>There when<br />you need it.</h3></div></article>
   </div></section>;
 }
 
 function NativeStory() {
-  return <section className="native-section" id="native"><div className="shell native-copy"><p className="eyebrow">Built for Mac</p><h2>Native throughout.</h2><p>SwiftUI and AppKit provide the window, menus, keyboard behavior, system materials, and Liquid Glass. The interface follows macOS instead of recreating it.</p><div className="native-points"><div><strong>System UI</strong><span>Familiar controls, shortcuts, focus, accessibility, and window behavior.</span></div><div><strong>Liquid Glass</strong><span>Used for navigation and controls where depth communicates hierarchy.</span></div><div><strong>Rust core</strong><span>Repository operations shared across the project without sharing the interface.</span></div></div></div></section>;
-}
-
-function Closing() {
-  return <section className="closing shell"><p className="eyebrow">Rift preview</p><h2>Try the current build.</h2><p>Rift is under active development. Download the nightly build or follow the project on GitHub.</p><div className="actions"><a className="button primary" href={downloadPage}>Download</a><a className="button" href={repository}>View on GitHub</a></div></section>;
+  return <section className="native-section" id="native"><div className="shell native-copy"><p className="eyebrow">Built for Mac</p><h2>Native throughout.</h2><p>SwiftUI, AppKit, and Liquid Glass. Rift looks and behaves like it belongs.</p></div></section>;
 }
 
 function DownloadPage() {
-  return <><Navigation /><main className="download-page"><section className="download-hero shell"><p className="eyebrow">Download Rift</p><h1>Choose your platform.</h1><p>Rift is currently available as a nightly preview.</p></section><section className="platform-downloads shell"><article><header><span>Available now</span><strong>macOS</strong></header><p>Universal build for Apple silicon and Intel.</p><dl><div><dt>Requires</dt><dd>macOS 26+</dd></div><div><dt>Format</dt><dd>DMG · unsigned preview</dd></div></dl><a className="button primary" href={macDownload}>Download DMG</a></article><article className="planned"><header><span>Planned</span><strong>Windows</strong></header><p>A native Windows release is planned for a later stage.</p><dl><div><dt>Status</dt><dd>In development</dd></div><div><dt>Availability</dt><dd>To be announced</dd></div></dl><button className="button" disabled>Coming later</button></article></section><p className="install-note shell">Because the current macOS preview is not notarized, open Rift from Finder’s context menu the first time.</p></main><footer className="shell"><Brand compact /><p>Native Git for macOS.</p><a href={repository}>GitHub</a></footer></>;
+  return <><Navigation /><main className="download-page"><section className="download-hero shell"><p className="eyebrow">Rift</p><h1>Download.</h1></section><section className="platform-downloads shell"><article><header><span>Available</span><strong>macOS</strong></header><p>macOS 26+ · Apple silicon and Intel</p><a className="button primary" href={macDownload}>Download DMG</a></article><article className="planned"><header><span>Planned</span><strong>Windows</strong></header><button className="button" disabled>Coming later</button></article></section><p className="install-note shell">Unsigned preview: open from Finder’s context menu the first time.</p></main><footer className="shell"><Brand compact /><p>Native Git for macOS.</p><a href={repository}>GitHub</a></footer></>;
 }
 
 export default function App() {
   if (window.location.pathname.endsWith("/download/") || window.location.pathname.endsWith("/download/index.html")) return <DownloadPage />;
-  return <><Navigation /><main id="top"><Hero /><Builders /><Experience /><NativeStory /><Closing /></main><footer className="shell"><Brand compact /><p>Native Git for macOS.</p><a href={repository}>GitHub</a></footer></>;
+  return <><Navigation /><main id="top"><Hero /><Builders /><Experience /><NativeStory /></main><footer className="shell"><Brand compact /><p>Native Git for macOS.</p><a href={repository}>GitHub</a></footer></>;
 }
