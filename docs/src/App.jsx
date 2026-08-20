@@ -30,7 +30,7 @@ function AppPreview() {
 }
 
 function Hero() {
-  return <section className="hero shell"><p className="eyebrow"><i /> Native for macOS</p><h1>Git, at home<br /><em>on your Mac.</em></h1><p className="lede">History, changes, and branches in one focused window.</p><div className="actions"><a className="button primary" href={downloadPage}>Download</a></div><p className="availability">macOS 26+ · Apple silicon and Intel</p><AppPreview /></section>;
+  return <section className="hero shell"><h1>Native<br /><em>throughout.</em></h1><p className="lede">SwiftUI, AppKit, and Liquid Glass. Rift looks and behaves like it belongs.</p><div className="actions"><a className="button primary" href={downloadPage}>Download</a></div><p className="availability">macOS 26+ · Apple silicon and Intel</p><AppPreview /></section>;
 }
 
 function Builders() {
@@ -46,15 +46,11 @@ function Experience() {
   </div></section>;
 }
 
-function NativeStory() {
-  return <section className="native-section" id="native"><div className="shell native-copy"><p className="eyebrow">Built for Mac</p><h2>Native throughout.</h2><p>SwiftUI, AppKit, and Liquid Glass. Rift looks and behaves like it belongs.</p></div></section>;
-}
-
 function DownloadPage() {
   return <><Navigation /><main className="download-page"><section className="download-hero shell"><p className="eyebrow">Rift</p><h1>Download.</h1></section><section className="platform-downloads shell"><article><header><span>Available</span><strong>macOS</strong></header><p>macOS 26+ · Apple silicon and Intel</p><a className="button primary" href={macDownload}>Download DMG</a></article><article className="planned"><header><span>Planned</span><strong>Windows</strong></header><button className="button" disabled>Coming later</button></article></section><p className="install-note shell">Unsigned preview: open from Finder’s context menu the first time.</p></main><footer className="shell"><Brand compact /><p>Native Git for macOS.</p><a href={repository}>GitHub</a></footer></>;
 }
 
 export default function App() {
   if (window.location.pathname.endsWith("/download/") || window.location.pathname.endsWith("/download/index.html")) return <DownloadPage />;
-  return <><Navigation /><main id="top"><Hero /><Builders /><Experience /><NativeStory /></main><footer className="shell"><Brand compact /><p>Native Git for macOS.</p><a href={repository}>GitHub</a></footer></>;
+  return <><Navigation /><main id="top"><Hero /><Builders /><Experience /></main><footer className="shell"><Brand compact /><p>Native Git for macOS.</p><a href={repository}>GitHub</a></footer></>;
 }
