@@ -3,14 +3,14 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 
-namespace Rift.Windows;
+namespace Gaji.Windows;
 
 public sealed class RepositoryViewModel : INotifyPropertyChanged
 {
     private string? root;
-    private string repositoryName = "Rift";
+    private string repositoryName = "Gaji";
     private string branch = "Open a repository";
-    private string detailTitle = "Welcome to Rift";
+    private string detailTitle = "Welcome to Gaji";
     private string detailText = "Open a local Git repository to begin.";
     private string commitMessage = "";
     private bool commitAmend;
@@ -231,7 +231,7 @@ public sealed class RepositoryViewModel : INotifyPropertyChanged
     public void StashAll()
     {
         if (root is not null)
-            RunNative(new { action = "stashPush", path = root, message = "Rift stash", includeUntracked = true });
+            RunNative(new { action = "stashPush", path = root, message = "Gaji stash", includeUntracked = true });
     }
 
     public void PopLatestStash()
@@ -332,8 +332,8 @@ public sealed class RepositoryViewModel : INotifyPropertyChanged
         ? null
         : Git(root, "remote").Split('\n', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
 
-    private static string SettingsPath => Environment.GetEnvironmentVariable("RIFT_SETTINGS_PATH") ?? Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Rift", "recent.txt");
+    private static string SettingsPath => Environment.GetEnvironmentVariable("GAJI_SETTINGS_PATH") ?? Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Gaji", "recent.txt");
 
     private void RememberRepository(string path)
     {

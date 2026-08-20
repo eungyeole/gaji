@@ -1,5 +1,5 @@
-const repository = "https://github.com/eungyeole/rift";
-const macDownload = `${repository}/releases/download/nightly/Rift-macOS.dmg`;
+const repository = "https://github.com/eungyeole/gaji";
+const macDownload = `${repository}/releases/download/nightly/Gaji-macOS.dmg`;
 const home = import.meta.env.BASE_URL;
 const downloadPage = `${home}download/`;
 const companies = {
@@ -14,11 +14,11 @@ const companies = {
 const builders = [["Google", "Samsung", "Apple", "Tesla", "Netflix", "LG", "SpaceX"], ["SpaceX", "LG", "Netflix", "Tesla", "Apple", "Samsung", "Google"]];
 
 function Mark() {
-  return <svg viewBox="0 0 40 40" aria-hidden="true"><defs><linearGradient id="rift-face" x1="8" y1="5" x2="31" y2="35" gradientUnits="userSpaceOnUse"><stop stopColor="#fff" /><stop offset="1" stopColor="#77787d" /></linearGradient><mask id="rift-cut"><path d="M20 3.5C29.8 3.5 36 10.1 36 19.7 36 29.4 29.5 36.5 19.8 36.5 10.2 36.5 4 30 4 20.2 4 10.8 10.4 3.5 20 3.5Z" fill="#fff" /><path d="M11.5 5.5c7 7.2 3.9 12 10.1 16.6 5.2 3.9 2.3 8.5 7.3 13.7M21.4 22.1c5.3-1.4 8.3-5.2 8.8-10.3" fill="none" stroke="#000" strokeWidth="3" strokeLinecap="round" /></mask></defs><rect x="4" y="3.5" width="32" height="33" fill="url(#rift-face)" mask="url(#rift-cut)" /></svg>;
+  return <svg viewBox="0 0 40 40" aria-hidden="true"><defs><linearGradient id="gaji-branch" x1="9" y1="7" x2="23" y2="36" gradientUnits="userSpaceOnUse"><stop stopColor="#fff" /><stop offset="1" stopColor="#77787d" /></linearGradient></defs><path d="M20 35c.2-6.4.1-10.7-2.5-15.2-2.1-3.7-5.2-6.7-9-9.3M18.5 22c4-3.1 6.1-7.3 6.2-13.4M19.6 28.5c4.4-1.7 8.5-5.2 12.1-10.2" fill="none" stroke="url(#gaji-branch)" strokeWidth="4.4" strokeLinecap="round" strokeLinejoin="round" /><circle cx="8.5" cy="10.5" r="3.2" fill="#f5f5f7" /><circle cx="24.7" cy="8.6" r="3.2" fill="#c7c7cc" /><circle cx="31.7" cy="18.3" r="3.2" fill="#8e8e93" /></svg>;
 }
 
 function Brand({ compact = false }) {
-  return <a className="brand" href={home} aria-label="Rift home">{!compact && <Mark />}<span>Rift</span></a>;
+  return <a className="brand" href={home} aria-label="Gaji home">{!compact && <Mark />}<span>Gaji</span></a>;
 }
 
 function Navigation() {
@@ -26,7 +26,7 @@ function Navigation() {
 }
 
 function AppPreview() {
-  return <div className="preview-stage"><div className="ambient-orb orb-one" /><div className="ambient-orb orb-two" /><figure className="product-shot"><img src={`${import.meta.env.BASE_URL}rift-workspace.png`} alt="Rift showing branches, commit history, and changed files in a native macOS window" /></figure></div>;
+  return <div className="preview-stage"><div className="ambient-orb orb-one" /><div className="ambient-orb orb-two" /><figure className="product-shot"><img src={`${import.meta.env.BASE_URL}gaji-workspace.png`} alt="Gaji showing branches, commit history, and changed files in a native macOS window" /></figure></div>;
 }
 
 function Hero() {
@@ -40,14 +40,14 @@ function Builders() {
 
 function Experience() {
   return <section className="section shell" id="experience"><div className="heading"><p className="eyebrow">Why native</p><h2>Less app. More Mac.</h2><p>No bundled browser runtime—just a compact, responsive Git client built around macOS.</p></div><div className="story-grid">
-    <article className="story-card"><p className="story-kicker">Liquid Glass</p><h3>The real thing.</h3><p>System materials, controls, and window behavior make Rift feel at home on macOS.</p></article>
+    <article className="story-card"><p className="story-kicker">Liquid Glass</p><h3>The real thing.</h3><p>System materials, controls, and window behavior make Gaji feel at home on macOS.</p></article>
     <article className="story-card"><p className="story-kicker">Small footprint</p><h3>No browser included.</h3><p>A native interface keeps the app lean and leaves more of your Mac to your work.</p></article>
     <article className="story-card"><p className="story-kicker">Native speed</p><h3>Ready when you are.</h3><p>System UI stays responsive while a fast Rust core handles the repository underneath.</p></article>
   </div></section>;
 }
 
 function DownloadPage() {
-  return <><Navigation /><main className="download-page"><section className="download-hero shell"><p className="eyebrow">Rift</p><h1>Download.</h1></section><section className="platform-downloads shell"><article><header><span>Available</span><strong>macOS</strong></header><p>macOS 26+ · Apple silicon and Intel</p><a className="button primary" href={macDownload}>Download DMG</a></article><article className="planned"><header><span>Planned</span><strong>Windows</strong></header><button className="button" disabled>Coming later</button></article></section><p className="install-note shell">Unsigned preview: open from Finder’s context menu the first time.</p></main><footer className="shell"><Brand compact /><p>Native Git for macOS.</p><a href={repository}>GitHub</a></footer></>;
+  return <><Navigation /><main className="download-page"><section className="download-hero shell"><p className="eyebrow">Gaji</p><h1>Download.</h1></section><section className="platform-downloads shell"><article><header><span>Available</span><strong>macOS</strong></header><p>macOS 26+ · Apple silicon and Intel</p><a className="button primary" href={macDownload}>Download DMG</a></article><article className="planned"><header><span>Planned</span><strong>Windows</strong></header><button className="button" disabled>Coming later</button></article></section><p className="install-note shell">Unsigned preview: open from Finder’s context menu the first time.</p></main><footer className="shell"><Brand compact /><p>Native Git for macOS.</p><a href={repository}>GitHub</a></footer></>;
 }
 
 export default function App() {

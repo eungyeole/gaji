@@ -1,5 +1,5 @@
 <Project>
-  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'Rift.Windows.Logic'">
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'Gaji.Windows.Logic'">
     <BaseIntermediateOutputPath>obj/logic/</BaseIntermediateOutputPath>
     <BaseOutputPath>bin/logic/</BaseOutputPath>
   </PropertyGroup>

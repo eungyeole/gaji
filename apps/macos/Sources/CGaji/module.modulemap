@@ -1,0 +1,4 @@
+module CGaji [system] {
+    header "gaji.h"
+    export *
+}

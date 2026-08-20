@@ -5,13 +5,13 @@
     <key>CFBundleDevelopmentRegion</key>
     <string>en</string>
     <key>CFBundleExecutable</key>
-    <string>RiftMac</string>
+    <string>GajiMac</string>
     <key>CFBundleIdentifier</key>
-    <string>dev.eungyeole.rift</string>
+    <string>dev.eungyeole.gaji</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>CFBundleName</key>
-    <string>Rift</string>
+    <string>Gaji</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
@@ -27,7 +27,7 @@
     <key>NSHumanReadableCopyright</key>
     <string>Copyright © 2026 Eungyeole. All rights reserved.</string>
     <key>SUFeedURL</key>
-    <string>https://github.com/eungyeole/rift/releases/download/nightly/appcast.xml</string>
+    <string>https://github.com/eungyeole/gaji/releases/download/nightly/appcast.xml</string>
     <key>SUPublicEDKey</key>
     <string>__SPARKLE_PUBLIC_ED_KEY__</string>
     <key>SUEnableAutomaticChecks</key>

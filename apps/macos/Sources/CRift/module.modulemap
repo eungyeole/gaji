@@ -1,4 +1,0 @@
-module CRift [system] {
-    header "rift.h"
-    export *
-}

@@ -3,7 +3,7 @@ using Microsoft.UI.Xaml.Controls;
 using Windows.Storage.Pickers;
 using WinRT.Interop;
 
-namespace Rift.Windows;
+namespace Gaji.Windows;
 
 public sealed partial class MainWindow : Window
 {

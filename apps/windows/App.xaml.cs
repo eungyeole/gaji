@@ -1,6 +1,6 @@
 using Microsoft.UI.Xaml;
 
-namespace Rift.Windows;
+namespace Gaji.Windows;
 
 public partial class App : Application
 {

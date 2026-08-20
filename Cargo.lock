@@ -37,6 +37,34 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "da7c62ceae207dd37ea5b845da6a0696c799f85e97da1ab5b7910be3c1c80223"
 
 [[package]]
+name = "gaji-cli"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "gaji-core",
+ "serde_json",
+]
+
+[[package]]
+name = "gaji-core"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
+name = "gaji-ffi"
+version = "0.1.0"
+dependencies = [
+ "gaji-core",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "getrandom"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -100,34 +128,6 @@ name = "r-efi"
 version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
-
-[[package]]
-name = "rift-cli"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "rift-core",
- "serde_json",
-]
-
-[[package]]
-name = "rift-core"
-version = "0.1.0"
-dependencies = [
- "serde",
- "tempfile",
- "thiserror",
-]
-
-[[package]]
-name = "rift-ffi"
-version = "0.1.0"
-dependencies = [
- "rift-core",
- "serde",
- "serde_json",
- "tempfile",
-]
 
 [[package]]
 name = "rustix"

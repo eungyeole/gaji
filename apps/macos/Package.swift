@@ -8,24 +8,24 @@ let repositoryRoot = packageDirectory.deletingLastPathComponent().deletingLastPa
 let rustLibraryPath = repositoryRoot.appending(path: "target/release").path
 
 let package = Package(
-    name: "RiftMac",
+    name: "GajiMac",
     platforms: [.macOS(.v26)],
-    products: [.executable(name: "RiftMac", targets: ["RiftMac"])],
+    products: [.executable(name: "GajiMac", targets: ["GajiMac"])],
     dependencies: [
         .package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.9.4")
     ],
     targets: [
-        .systemLibrary(name: "CRift", path: "Sources/CRift"),
+        .systemLibrary(name: "CGaji", path: "Sources/CGaji"),
         .executableTarget(
-            name: "RiftMac",
+            name: "GajiMac",
             dependencies: [
-                "CRift",
+                "CGaji",
                 .product(name: "Sparkle", package: "Sparkle")
             ],
             linkerSettings: [
                 .unsafeFlags([
                     "-Xlinker", "-force_load",
-                    "-Xlinker", "\(rustLibraryPath)/librift_ffi.a"
+                    "-Xlinker", "\(rustLibraryPath)/libgaji_ffi.a"
                 ])
             ]
         )

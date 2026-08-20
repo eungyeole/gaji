@@ -1,0 +1,10 @@
+[package]
+name = "gaji-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+gaji-core = { path = "../gaji-core" }
+serde_json.workspace = true

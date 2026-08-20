@@ -2,7 +2,7 @@
 
 ## Principle
 
-Rift shares behavior, not pixels. Git concepts and operations remain consistent
+Gaji shares behavior, not pixels. Git concepts and operations remain consistent
 across platforms; navigation, materials, controls, menus, keyboard behavior, and
 window management follow the host platform.
 

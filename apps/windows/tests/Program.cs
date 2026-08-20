@@ -1,9 +1,9 @@
-using Rift.Windows;
+using Gaji.Windows;
 
 if (args.Length != 1) throw new ArgumentException("Pass a Git repository path.");
 Environment.SetEnvironmentVariable(
-    "RIFT_SETTINGS_PATH",
-    Path.Combine(Path.GetTempPath(), $"rift-verify-{Environment.ProcessId}.txt"));
+    "GAJI_SETTINGS_PATH",
+    Path.Combine(Path.GetTempPath(), $"gaji-verify-{Environment.ProcessId}.txt"));
 
 var repository = new RepositoryViewModel();
 repository.Open(args[0]);
