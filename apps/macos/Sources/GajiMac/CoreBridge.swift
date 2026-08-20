@@ -1,20 +1,20 @@
 import CGaji
 import Foundation
 
-struct CoreSnapshot: Decodable {
+struct CoreSnapshot: Decodable, Sendable {
     let root: String
     let branch: String
     let changes: [CoreChange]
     let recentCommits: [CoreCommit]
 }
 
-struct CoreChange: Decodable {
+struct CoreChange: Decodable, Sendable {
     let indexStatus: String
     let worktreeStatus: String
     let path: String
 }
 
-struct CoreCommit: Decodable {
+struct CoreCommit: Decodable, Sendable {
     let id: String
     let author: String
     let authoredAt: String

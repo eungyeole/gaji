@@ -3,10 +3,10 @@ import Foundation
 import Observation
 
 struct FileChange: Identifiable, Hashable {
-    let id = UUID()
     let indexStatus: Character
     let worktreeStatus: Character
     let path: String
+    var id: String { "\(indexStatus)\(worktreeStatus):\(path)" }
 
     var statusLabel: String {
         if indexStatus == "?" { return "U" }
@@ -61,6 +61,9 @@ final class RepositoryStore {
     @ObservationIgnored private var fileLoadTask: Task<Void, Never>?
     @ObservationIgnored private var commitLoadTask: Task<Void, Never>?
     @ObservationIgnored private var operationTask: Task<Void, Never>?
+    @ObservationIgnored private var repositoryWatcher: RepositoryFileWatcher?
+    @ObservationIgnored private var repositoryRefreshTask: Task<Void, Never>?
+    @ObservationIgnored private var pendingGraphRefresh = false
     @ObservationIgnored private var workingFileCache: [String: LoadedFileDetails] = [:]
     @ObservationIgnored private var commitFileCache: [String: String] = [:]
     @ObservationIgnored private var stashFileCache: [String: String] = [:]
@@ -176,6 +179,7 @@ final class RepositoryStore {
             recentRepositories = Array(recentRepositories.prefix(10))
             UserDefaults.standard.set(recentRepositories, forKey: "recentRepositories")
             refresh()
+            watchRepository()
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -284,6 +288,55 @@ final class RepositoryStore {
             if let selection { selectedCommitIDs.insert(selection) }
             errorMessage = nil
         } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func watchRepository() {
+        guard let root else { return }
+        repositoryWatcher = RepositoryFileWatcher(path: root.path()) { [weak self] gitChanged in
+            Task { @MainActor in self?.scheduleRepositoryRefresh(includeGraph: gitChanged) }
+        }
+    }
+
+    private func scheduleRepositoryRefresh(includeGraph: Bool) {
+        pendingGraphRefresh = pendingGraphRefresh || includeGraph
+        repositoryRefreshTask?.cancel()
+        repositoryRefreshTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(250))
+            guard !Task.isCancelled, let self, !self.isBusy else { return }
+            let includeGraph = self.pendingGraphRefresh
+            self.pendingGraphRefresh = false
+            if includeGraph { self.refresh() } else { await self.refreshWorkingCopy() }
+        }
+    }
+
+    private func refreshWorkingCopy() async {
+        guard let root else { return }
+        let path = root.path()
+        let result = await Task.detached(priority: .utility) {
+            Result { try CoreBridge.inspect(path) }
+        }.value
+        guard self.root?.path() == path else { return }
+        switch result {
+        case let .success(snapshot):
+            branch = snapshot.branch
+            changes = snapshot.changes.map {
+                FileChange(
+                    indexStatus: $0.indexStatus.first ?? " ",
+                    worktreeStatus: $0.worktreeStatus.first ?? " ",
+                    path: $0.path
+                )
+            }
+            workingFileCache.removeAll()
+            if selectedFileCommit == nil, let selectedFile {
+                if let change = changes.first(where: { $0.path == selectedFile }) {
+                    select(change)
+                } else {
+                    closeFileDetails()
+                }
+            }
+        case let .failure(error):
             errorMessage = error.localizedDescription
         }
     }
