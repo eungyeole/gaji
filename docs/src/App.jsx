@@ -3,7 +3,7 @@ const download = `${repository}/releases/download/nightly/Rift-macOS.dmg`;
 const builders = ["Your team", "Studio", "Open source", "Product", "Platform", "Independent"];
 
 function Mark() {
-  return <svg viewBox="0 0 36 36" aria-hidden="true"><defs><linearGradient id="mark"><stop stopColor="#a093ff" /><stop offset="1" stopColor="#36bffa" /></linearGradient></defs><path fill="url(#mark)" d="M8 4h11.6C26.5 4 31 7.8 31 13.8c0 4-2.1 7-5.8 8.7L32 32h-8.2l-5.6-8.3h-3V32H8V4Zm7.2 6.1v7.7h4c2.9 0 4.5-1.4 4.5-3.9s-1.6-3.8-4.5-3.8h-4Z" /></svg>;
+  return <svg viewBox="0 0 36 36" aria-hidden="true"><defs><linearGradient id="mark" x1="7" y1="5" x2="29" y2="31" gradientUnits="userSpaceOnUse"><stop stopColor="#76dcff" /><stop offset=".52" stopColor="#0a84ff" /><stop offset="1" stopColor="#a77bff" /></linearGradient></defs><path d="M9 30V6h9.5C24 6 27 8.8 27 13.4s-3 7.5-8.5 7.5H9" fill="none" stroke="url(#mark)" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" /><path d="m18.5 20.9 9 9.1" fill="none" stroke="url(#mark)" strokeWidth="3.4" strokeLinecap="round" /><circle cx="9" cy="6" r="2" fill="#76dcff" /><circle cx="9" cy="30" r="2" fill="#0a84ff" /><circle cx="27.5" cy="30" r="2" fill="#a77bff" /></svg>;
 }
 
 function Brand({ compact = false }) {
@@ -23,7 +23,8 @@ function Hero() {
 }
 
 function Builders() {
-  return <section className="builders shell" aria-labelledby="builders-title"><p id="builders-title">Used by builders from</p><div className="builder-logos">{builders.map((builder, index) => <span key={builder}><i>{String(index + 1).padStart(2, "0")}</i>{builder}</span>)}</div><small>Community slots · replace with verified teams as Rift grows</small></section>;
+  const logos = <div className="builder-set">{builders.map((builder, index) => <span key={builder}><i>{String(index + 1).padStart(2, "0")}</i>{builder}</span>)}</div>;
+  return <section className="builders" aria-labelledby="builders-title"><p id="builders-title">Used by builders from</p><div className="builder-marquee"><div className="builder-track">{logos}<div className="builder-set" aria-hidden="true">{builders.map((builder, index) => <span key={builder}><i>{String(index + 1).padStart(2, "0")}</i>{builder}</span>)}</div></div></div><small>Community slots · replace with verified teams as Rift grows</small></section>;
 }
 
 function Experience() {
