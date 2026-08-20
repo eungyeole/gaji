@@ -1,9 +1,12 @@
 const repository = "https://github.com/eungyeole/rift";
 const download = `${repository}/releases/download/nightly/Rift-macOS.dmg`;
-const builders = ["Your team", "Studio", "Open source", "Product", "Platform", "Independent"];
+const builders = [
+  ["Your team", "Studio", "Open source", "Product", "Platform", "Independent"],
+  ["Engineering", "Design", "Infrastructure", "Developer tools", "Research", "Community"],
+];
 
 function Mark() {
-  return <svg viewBox="0 0 36 36" aria-hidden="true"><defs><linearGradient id="rift-left" x1="5" y1="5" x2="17" y2="31" gradientUnits="userSpaceOnUse"><stop stopColor="#76dcff" /><stop offset="1" stopColor="#0a84ff" /></linearGradient><linearGradient id="rift-right" x1="19" y1="5" x2="31" y2="31" gradientUnits="userSpaceOnUse"><stop stopColor="#0a84ff" /><stop offset="1" stopColor="#a77bff" /></linearGradient></defs><path d="M5 5h12l-3.5 7 3.5 6-5 6 3 7H5V5Z" fill="url(#rift-left)" /><path d="M31 5H19l3.5 7-3.5 6 5 6-3 7h10V5Z" fill="url(#rift-right)" /></svg>;
+  return <svg viewBox="0 0 36 36" aria-hidden="true"><defs><linearGradient id="rift-left" x1="5" y1="5" x2="17" y2="31" gradientUnits="userSpaceOnUse"><stop stopColor="#f5f5f7" /><stop offset="1" stopColor="#a1a1aa" /></linearGradient><linearGradient id="rift-right" x1="19" y1="5" x2="31" y2="31" gradientUnits="userSpaceOnUse"><stop stopColor="#c7c7cc" /><stop offset="1" stopColor="#636366" /></linearGradient></defs><path d="M5 5h12l-3.5 7 3.5 6-5 6 3 7H5V5Z" fill="url(#rift-left)" /><path d="M31 5H19l3.5 7-3.5 6 5 6-3 7h10V5Z" fill="url(#rift-right)" /></svg>;
 }
 
 function Brand({ compact = false }) {
@@ -23,8 +26,8 @@ function Hero() {
 }
 
 function Builders() {
-  const logos = <div className="builder-set">{builders.map((builder, index) => <span key={builder}><i>{String(index + 1).padStart(2, "0")}</i>{builder}</span>)}</div>;
-  return <section className="builders" aria-labelledby="builders-title"><p id="builders-title">Used by builders from</p><div className="builder-marquee"><div className="builder-track">{logos}<div className="builder-set" aria-hidden="true">{builders.map((builder, index) => <span key={builder}><i>{String(index + 1).padStart(2, "0")}</i>{builder}</span>)}</div></div></div><small>Community slots · replace with verified teams as Rift grows</small></section>;
+  const row = (items, reverse) => <div className="builder-row"><div className={`builder-track${reverse ? " reverse" : ""}`}>{[false, true].map((duplicate) => <div className="builder-set" aria-hidden={duplicate || undefined} key={String(duplicate)}>{items.map((builder, index) => <span key={builder}><i>{String(index + 1).padStart(2, "0")}</i>{builder}</span>)}</div>)}</div></div>;
+  return <section className="builders" aria-labelledby="builders-title"><p id="builders-title">Used by builders from</p><div className="builder-marquee">{row(builders[0], false)}{row(builders[1], true)}</div><small>Community slots · replace with verified teams as Rift grows</small></section>;
 }
 
 function Experience() {
