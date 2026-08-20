@@ -12,7 +12,6 @@
     "@vitejs/plugin-react": "latest",
     "react": "latest",
     "react-dom": "latest",
-    "simple-icons": "^16.28.0",
     "vite": "latest"
   }
 }
