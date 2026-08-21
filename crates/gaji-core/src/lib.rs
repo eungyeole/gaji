@@ -272,6 +272,7 @@ pub(crate) fn git(directory: &Path, arguments: &[&str]) -> Result<String, GajiEr
         .args(arguments)
         .env("GIT_EDITOR", "true")
         .env("GIT_SEQUENCE_EDITOR", "true")
+        .env("GIT_OPTIONAL_LOCKS", "0")
         .output()?;
 
     if !output.status.success() {

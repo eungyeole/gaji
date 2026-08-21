@@ -63,6 +63,7 @@ final class RepositoryStore {
     @ObservationIgnored private var operationTask: Task<Void, Never>?
     @ObservationIgnored private var repositoryWatcher: RepositoryFileWatcher?
     @ObservationIgnored private var repositoryRefreshTask: Task<Void, Never>?
+    @ObservationIgnored private var repositoryRefreshPending = false
     @ObservationIgnored private var pendingGraphRefresh = false
     @ObservationIgnored private var workingFileCache: [String: LoadedFileDetails] = [:]
     @ObservationIgnored private var commitFileCache: [String: String] = [:]
@@ -300,14 +301,24 @@ final class RepositoryStore {
     }
 
     private func scheduleRepositoryRefresh(includeGraph: Bool) {
+        repositoryRefreshPending = true
         pendingGraphRefresh = pendingGraphRefresh || includeGraph
-        repositoryRefreshTask?.cancel()
+        guard repositoryRefreshTask == nil else { return }
         repositoryRefreshTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(250))
-            guard !Task.isCancelled, let self, !self.isBusy else { return }
-            let includeGraph = self.pendingGraphRefresh
-            self.pendingGraphRefresh = false
-            if includeGraph { self.refresh() } else { await self.refreshWorkingCopy() }
+            guard let self else { return }
+            while self.repositoryRefreshPending, !Task.isCancelled {
+                self.repositoryRefreshPending = false
+                try? await Task.sleep(for: .milliseconds(300))
+                guard !Task.isCancelled else { break }
+                if self.isBusy {
+                    self.repositoryRefreshPending = true
+                    continue
+                }
+                let includeGraph = self.pendingGraphRefresh
+                self.pendingGraphRefresh = false
+                if includeGraph { self.refresh() } else { await self.refreshWorkingCopy() }
+            }
+            self.repositoryRefreshTask = nil
         }
     }
 
@@ -320,14 +331,15 @@ final class RepositoryStore {
         guard self.root?.path() == path else { return }
         switch result {
         case let .success(snapshot):
-            branch = snapshot.branch
-            changes = snapshot.changes.map {
+            let updatedChanges = snapshot.changes.map {
                 FileChange(
                     indexStatus: $0.indexStatus.first ?? " ",
                     worktreeStatus: $0.worktreeStatus.first ?? " ",
                     path: $0.path
                 )
             }
+            branch = snapshot.branch
+            if changes != updatedChanges { changes = updatedChanges }
             workingFileCache.removeAll()
             if selectedFileCommit == nil, let selectedFile {
                 if let change = changes.first(where: { $0.path == selectedFile }) {
@@ -968,7 +980,8 @@ final class RepositoryStore {
         process.standardError = stderr
         process.environment = ProcessInfo.processInfo.environment.merging([
             "GIT_EDITOR": "true",
-            "GIT_SEQUENCE_EDITOR": "true"
+            "GIT_SEQUENCE_EDITOR": "true",
+            "GIT_OPTIONAL_LOCKS": "0"
         ]) { _, new in new }
         try process.run()
         process.waitUntilExit()

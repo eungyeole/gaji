@@ -953,6 +953,7 @@ fn git_process(arguments: &[&str]) -> Result<String, GajiError> {
     let output = Command::new("git")
         .args(arguments)
         .env("GIT_EDITOR", "true")
+        .env("GIT_OPTIONAL_LOCKS", "0")
         .output()?;
     decode_output(output)
 }
@@ -960,6 +961,7 @@ fn git_process(arguments: &[&str]) -> Result<String, GajiError> {
 fn git_with_input(arguments: &[&str], input: &str) -> Result<String, GajiError> {
     let mut child = Command::new("git")
         .args(arguments)
+        .env("GIT_OPTIONAL_LOCKS", "0")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

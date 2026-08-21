@@ -87,6 +87,7 @@ pub fn start_interactive_rebase(
         .env("GIT_SEQUENCE_EDITOR", files.command())
         .env("GAJI_REBASE_TODO", &files.todo)
         .env("GIT_EDITOR", "true")
+        .env("GIT_OPTIONAL_LOCKS", "0")
         .output()?;
 
     if output.status.success() {
