@@ -2,10 +2,16 @@ import CoreServices
 import Foundation
 
 final class RepositoryFileWatcher: @unchecked Sendable {
-    private var stream: FSEventStreamRef?
-    private let onChange: @Sendable (Bool) -> Void
+    struct Change: OptionSet, Sendable {
+        let rawValue: UInt8
+        static let workingCopy = Change(rawValue: 1 << 0)
+        static let metadata = Change(rawValue: 1 << 1)
+    }
 
-    init(path: String, onChange: @escaping @Sendable (Bool) -> Void) {
+    private var stream: FSEventStreamRef?
+    private let onChange: @Sendable (Change) -> Void
+
+    init(path: String, onChange: @escaping @Sendable (Change) -> Void) {
         self.onChange = onChange
         var context = FSEventStreamContext(
             version: 0,
@@ -20,14 +26,11 @@ final class RepositoryFileWatcher: @unchecked Sendable {
                 guard let info else { return }
                 let watcher = Unmanaged<RepositoryFileWatcher>.fromOpaque(info).takeUnretainedValue()
                 let values = unsafeBitCast(paths, to: NSArray.self) as? [String] ?? []
-                let relevant = values.prefix(count).filter {
-                    !$0.contains("/target/") &&
-                    !$0.contains("/.build/") &&
-                    !$0.contains("/node_modules/") &&
-                    !$0.contains("/docs/dist/")
+                let change = values.prefix(count).reduce(into: Change()) { change, path in
+                    change.formUnion(RepositoryFileWatcher.classify(path))
                 }
-                guard !relevant.isEmpty else { return }
-                watcher.onChange(relevant.contains { $0.contains("/.git/") })
+                guard !change.isEmpty else { return }
+                watcher.onChange(change)
             },
             &context,
             [path] as CFArray,
@@ -43,6 +46,22 @@ final class RepositoryFileWatcher: @unchecked Sendable {
             FSEventStreamSetDispatchQueue(stream, DispatchQueue.global(qos: .utility))
             FSEventStreamStart(stream)
         }
+    }
+
+    private static func classify(_ path: String) -> Change {
+        if path.contains("/target/") || path.contains("/.build/") ||
+            path.contains("/node_modules/") || path.contains("/docs/dist/") {
+            return []
+        }
+        guard let gitRange = path.range(of: "/.git/") else { return .workingCopy }
+        let gitPath = String(path[gitRange.upperBound...])
+        if gitPath == "index" || gitPath == "index.lock" { return .workingCopy }
+        if gitPath == "HEAD" || gitPath == "ORIG_HEAD" || gitPath == "packed-refs" ||
+            gitPath.hasPrefix("refs/") || gitPath.hasPrefix("rebase-") ||
+            gitPath.hasPrefix("sequencer/") || gitPath.hasSuffix("_HEAD") {
+            return [.workingCopy, .metadata]
+        }
+        return []
     }
 
     deinit {

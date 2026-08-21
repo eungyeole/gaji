@@ -64,7 +64,8 @@ final class RepositoryStore {
     @ObservationIgnored private var repositoryWatcher: RepositoryFileWatcher?
     @ObservationIgnored private var repositoryRefreshTask: Task<Void, Never>?
     @ObservationIgnored private var repositoryRefreshPending = false
-    @ObservationIgnored private var pendingGraphRefresh = false
+    @ObservationIgnored private var pendingRefreshChange: RepositoryFileWatcher.Change = []
+    @ObservationIgnored private var acceptsLiveUpdates = true
     @ObservationIgnored private var workingFileCache: [String: LoadedFileDetails] = [:]
     @ObservationIgnored private var commitFileCache: [String: String] = [:]
     @ObservationIgnored private var stashFileCache: [String: String] = [:]
@@ -180,7 +181,7 @@ final class RepositoryStore {
             recentRepositories = Array(recentRepositories.prefix(10))
             UserDefaults.standard.set(recentRepositories, forKey: "recentRepositories")
             refresh()
-            watchRepository()
+            if acceptsLiveUpdates { watchRepository() }
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -237,27 +238,31 @@ final class RepositoryStore {
         do {
             let snapshot = try CoreBridge.inspect(root.path())
             branch = snapshot.branch
-            changes = snapshot.changes.map {
+            let updatedChanges = snapshot.changes.map {
                 FileChange(
                     indexStatus: $0.indexStatus.first ?? " ",
                     worktreeStatus: $0.worktreeStatus.first ?? " ",
                     path: $0.path
                 )
             }
+            if changes != updatedChanges { changes = updatedChanges }
             let formatter = ISO8601DateFormatter()
-            commits = try CoreBridge.graph(root.path()).map {
+            let updatedCommits = try CoreBridge.graph(root.path()).map {
                 Commit(
                     id: $0.id, author: $0.author, authorEmail: $0.authorEmail,
                     date: formatter.date(from: $0.authoredAt),
                     subject: $0.subject, parents: $0.parents, references: $0.references
                 )
             }
-            branches = try git(at: root, "branch", "--format=%(refname:short)")
+            if commits != updatedCommits { commits = updatedCommits }
+            let updatedBranches = try git(at: root, "branch", "--format=%(refname:short)")
                 .split(separator: "\n").map(String.init)
-            remoteBranches = try git(at: root, "for-each-ref", "--format=%(refname:short)", "refs/remotes")
+            if branches != updatedBranches { branches = updatedBranches }
+            let updatedRemoteBranches = try git(at: root, "for-each-ref", "--format=%(refname:short)", "refs/remotes")
                 .split(separator: "\n")
                 .map(String.init)
                 .filter { !$0.hasSuffix("/HEAD") }
+            if remoteBranches != updatedRemoteBranches { remoteBranches = updatedRemoteBranches }
             remotes = try git(at: root, "remote").split(separator: "\n").map(String.init)
             let remote = remotes.contains("origin") ? "origin" : remotes.first
             githubRepository = remote
@@ -294,15 +299,31 @@ final class RepositoryStore {
     }
 
     private func watchRepository() {
-        guard let root else { return }
-        repositoryWatcher = RepositoryFileWatcher(path: root.path()) { [weak self] gitChanged in
-            Task { @MainActor in self?.scheduleRepositoryRefresh(includeGraph: gitChanged) }
+        guard acceptsLiveUpdates, repositoryWatcher == nil, let root else { return }
+        repositoryWatcher = RepositoryFileWatcher(path: root.path()) { [weak self] change in
+            Task { @MainActor in self?.scheduleRepositoryRefresh(change) }
         }
     }
 
-    private func scheduleRepositoryRefresh(includeGraph: Bool) {
+    func setActive(_ active: Bool) {
+        guard acceptsLiveUpdates != active else { return }
+        acceptsLiveUpdates = active
+        if active {
+            watchRepository()
+            scheduleRepositoryRefresh([.workingCopy, .metadata])
+        } else {
+            repositoryWatcher = nil
+            repositoryRefreshTask?.cancel()
+            repositoryRefreshTask = nil
+            repositoryRefreshPending = false
+            pendingRefreshChange = []
+        }
+    }
+
+    private func scheduleRepositoryRefresh(_ change: RepositoryFileWatcher.Change) {
+        guard acceptsLiveUpdates else { return }
         repositoryRefreshPending = true
-        pendingGraphRefresh = pendingGraphRefresh || includeGraph
+        pendingRefreshChange.formUnion(change)
         guard repositoryRefreshTask == nil else { return }
         repositoryRefreshTask = Task { [weak self] in
             guard let self else { return }
@@ -314,9 +335,10 @@ final class RepositoryStore {
                     self.repositoryRefreshPending = true
                     continue
                 }
-                let includeGraph = self.pendingGraphRefresh
-                self.pendingGraphRefresh = false
-                if includeGraph { self.refresh() } else { await self.refreshWorkingCopy() }
+                let change = self.pendingRefreshChange
+                self.pendingRefreshChange = []
+                if change.contains(.metadata) { self.refresh() }
+                else if change.contains(.workingCopy) { await self.refreshWorkingCopy() }
             }
             self.repositoryRefreshTask = nil
         }

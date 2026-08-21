@@ -35,6 +35,7 @@ final class WorkspaceStore {
                 $0.repository.root?.standardizedFileURL.path() == selectedPath
             }?.id ?? restored[0].id
         }
+        updateActiveRepositories()
     }
 
     var selectedRepository: RepositoryStore {
@@ -45,6 +46,7 @@ final class WorkspaceStore {
         let tab = RepositoryTab(repository: RepositoryStore(restoreLastRepository: false))
         tabs.append(tab)
         selectedTabID = tab.id
+        updateActiveRepositories()
     }
 
     func chooseRepository() {
@@ -62,6 +64,7 @@ final class WorkspaceStore {
         let path = url.standardizedFileURL.path()
         if let existing = tabs.first(where: { $0.repository.root?.standardizedFileURL.path() == path }) {
             selectedTabID = existing.id
+            updateActiveRepositories()
             persistTabs()
             return
         }
@@ -76,12 +79,14 @@ final class WorkspaceStore {
         let tab = RepositoryTab(repository: repository)
         tabs.append(tab)
         selectedTabID = tab.id
+        updateActiveRepositories()
         persistTabs()
     }
 
     func select(_ id: RepositoryTab.ID) {
         guard tabs.contains(where: { $0.id == id }) else { return }
         selectedTabID = id
+        updateActiveRepositories()
         persistTabs()
     }
 
@@ -92,6 +97,7 @@ final class WorkspaceStore {
         if wasSelected {
             selectedTabID = tabs[min(index, tabs.count - 1)].id
         }
+        updateActiveRepositories()
         persistTabs()
     }
 
@@ -102,6 +108,12 @@ final class WorkspaceStore {
         UserDefaults.standard.set(paths, forKey: Self.tabsKey)
         if let selectedPath = selectedRepository.root?.standardizedFileURL.path() {
             UserDefaults.standard.set(selectedPath, forKey: Self.selectedPathKey)
+        }
+    }
+
+    private func updateActiveRepositories() {
+        for tab in tabs {
+            tab.repository.setActive(tab.id == selectedTabID)
         }
     }
 }
