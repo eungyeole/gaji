@@ -207,6 +207,7 @@ struct ContentView: View {
                 Button(action: repository.push) {
                     Label("Push", systemImage: "arrow.up.to.line")
                 }
+                .help("Push the current branch")
                 .disabled(repository.root == nil || repository.isBusy)
             }
             ToolbarItem {
@@ -214,10 +215,12 @@ struct ContentView: View {
                     Button(action: repository.stash) {
                         Label("Stash", systemImage: "tray.and.arrow.down")
                     }
+                    .help("Stash working copy changes")
                     .disabled(repository.root == nil || repository.isBusy)
                     Button(action: repository.popStash) {
                         Label("Pop", systemImage: "tray.and.arrow.up")
                     }
+                    .help("Pop the latest stash")
                     .disabled(repository.root == nil || repository.stashes.isEmpty || repository.isBusy)
                 }
             }
