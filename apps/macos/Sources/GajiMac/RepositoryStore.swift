@@ -14,6 +14,14 @@ struct FileChange: Identifiable, Hashable {
     }
 }
 
+struct CommitReference: Hashable {
+    let name: String
+    let fullName: String
+    let kind: String
+    let isCurrent: Bool
+    let isSuppressed: Bool
+}
+
 struct Commit: Identifiable, Hashable {
     let id: String
     let author: String
@@ -22,8 +30,20 @@ struct Commit: Identifiable, Hashable {
     let subject: String
     let parents: [String]
     let references: [String]
+    let referenceDetails: [CommitReference]
+    let isStash: Bool
 
-    init(id: String, author: String, authorEmail: String = "", date: Date?, subject: String, parents: [String] = [], references: [String] = []) {
+    init(
+        id: String,
+        author: String,
+        authorEmail: String = "",
+        date: Date?,
+        subject: String,
+        parents: [String] = [],
+        references: [String] = [],
+        referenceDetails: [CommitReference] = [],
+        isStash: Bool? = nil
+    ) {
         self.id = id
         self.author = author
         self.authorEmail = authorEmail
@@ -31,6 +51,14 @@ struct Commit: Identifiable, Hashable {
         self.subject = subject
         self.parents = parents
         self.references = references
+        self.referenceDetails = referenceDetails
+        self.isStash = isStash ?? references.contains { reference in
+            let name = reference
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased()
+            return name == "stash" || name == "refs/stash" ||
+                name.hasPrefix("stash@{") || name.hasPrefix("stash: ")
+        }
     }
 }
 
@@ -251,7 +279,19 @@ final class RepositoryStore {
                 Commit(
                     id: $0.id, author: $0.author, authorEmail: $0.authorEmail,
                     date: formatter.date(from: $0.authoredAt),
-                    subject: $0.subject, parents: $0.parents, references: $0.references
+                    subject: $0.subject,
+                    parents: $0.parents,
+                    references: $0.references,
+                    referenceDetails: ($0.referenceDetails ?? []).map {
+                        CommitReference(
+                            name: $0.name,
+                            fullName: $0.fullName,
+                            kind: $0.kind,
+                            isCurrent: $0.isCurrent,
+                            isSuppressed: $0.isSuppressed
+                        )
+                    },
+                    isStash: $0.isStash
                 )
             }
             if commits != updatedCommits { commits = updatedCommits }
@@ -268,7 +308,24 @@ final class RepositoryStore {
             githubRepository = remote
                 .flatMap { try? git(at: root, "remote", "get-url", $0) }
                 .flatMap(Self.githubRepository(from:))
+            let previousStash = selectedStash
             stashes = (try? CoreBridge.stashes(root.path())) ?? []
+            if let previousStash {
+                let refreshed = previousStash.commit.flatMap { commit in
+                    stashes.first(where: { $0.commit == commit })
+                } ?? stashes.first(where: { $0.reference == previousStash.reference })
+                if let refreshed {
+                    if refreshed.reference == previousStash.reference {
+                        selectedStash = refreshed
+                    } else {
+                        // Re-run the index-based core query when an external push/drop
+                        // moves the same stash to a different reflog position.
+                        selectStash(refreshed)
+                    }
+                } else {
+                    closeStashDetails()
+                }
+            }
             tags = try git(at: root, "tag", "--list").split(separator: "\n").map(String.init)
             worktrees = (try? CoreBridge.worktrees(root.path())) ?? []
             submodules = (try? CoreBridge.submodules(root.path())) ?? []
@@ -285,11 +342,12 @@ final class RepositoryStore {
                 closeFileDetails()
             }
             let commitIDs = Set(commits.map(\.id))
+            let defaultCommitID = commits.first(where: { !$0.isStash })?.id
             selectedCommitIDs.formIntersection(commitIDs)
             if let selection, !commitIDs.contains(selection) {
-                self.selection = changes.isEmpty ? commits.first?.id : nil
-            } else if selection == nil, changes.isEmpty {
-                selection = commits.first?.id
+                self.selection = changes.isEmpty && selectedStash == nil ? defaultCommitID : nil
+            } else if selection == nil, changes.isEmpty, selectedStash == nil {
+                selection = defaultCommitID
             }
             if let selection { selectedCommitIDs.insert(selection) }
             errorMessage = nil
@@ -387,6 +445,12 @@ final class RepositoryStore {
 
     func updateCommitSelection(_ ids: Set<Commit.ID>, ordered visibleIDs: [Commit.ID]) {
         let added = ids.subtracting(selectedCommitIDs)
+        let stashID = added.first(where: { id in commits.first(where: { $0.id == id })?.isStash == true })
+            ?? ids.first(where: { id in commits.first(where: { $0.id == id })?.isStash == true })
+        if let stashID, let stash = stash(matching: stashID) {
+            selectStash(stash)
+            return
+        }
         selectedCommitIDs = ids
         if ids.isEmpty {
             selection = nil
@@ -400,6 +464,11 @@ final class RepositoryStore {
     func clearCommitSelection() {
         selectedCommitIDs = []
         selection = nil
+    }
+
+    func stash(matching commitID: String) -> CoreStash? {
+        stashes.first(where: { $0.commit == commitID })
+            ?? stashes.first(where: { $0.index == 0 })
     }
 
     func select(_ change: FileChange, staged: Bool? = nil) {
@@ -519,7 +588,7 @@ final class RepositoryStore {
             let result = await Task.detached(priority: .userInitiated) {
                 Result { try CoreBridge.stashFiles(rootPath, index: stash.index) }
             }.value
-            guard !Task.isCancelled, let self, self.selectedStash?.reference == stash.reference else { return }
+            guard !Task.isCancelled, let self, self.selectedStash?.id == stash.id else { return }
             switch result {
             case let .success(files): self.selectedStashFiles = files
             case let .failure(error): self.errorMessage = error.localizedDescription
@@ -535,7 +604,7 @@ final class RepositoryStore {
         selectedFileCommit = stash.reference
         selectedHunks = []
         let rootPath = root.path()
-        let cacheKey = "\(rootPath):\(stash.reference):\(change.path)"
+        let cacheKey = "\(rootPath):\(stash.id):\(change.path)"
         if let diff = stashFileCache[cacheKey] {
             selectedFileDiff = diff
             selectedFileIsLoading = false
@@ -549,7 +618,7 @@ final class RepositoryStore {
             }.value
             guard !Task.isCancelled,
                   let self,
-                  self.selectedStash?.reference == stash.reference,
+                  self.selectedStash?.id == stash.id,
                   self.selectedFile == change.path else { return }
             switch result {
             case let .success(diff):

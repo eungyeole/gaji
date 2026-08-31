@@ -691,6 +691,9 @@ private struct SidebarView: View {
 
     private var matchingLocalBranches: [String] { matching(repository.branches) }
     private var matchingRemoteBranches: [String] { matching(repository.remoteBranches) }
+    private var isSearchingBranches: Bool {
+        !branchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -715,12 +718,12 @@ private struct SidebarView: View {
             List(selection: $selectedItem) {
                 Section {
                     if matchingLocalBranches.contains(repository.branch) {
-                        BranchRow(name: repository.branch, isCurrent: true)
+                        BranchRow(name: repository.branch, fullName: repository.branch, isCurrent: true)
                             .tag("local:\(repository.branch)")
                             .contextMenu { LocalBranchMenu(branch: repository.branch) }
                     }
                     BranchTreeRows(
-                        nodes: branchTree(matchingLocalBranches.filter { $0 != repository.branch }),
+                        nodes: branchNodes(matchingLocalBranches.filter { $0 != repository.branch }),
                         scope: .local
                     )
                 } header: {
@@ -728,7 +731,7 @@ private struct SidebarView: View {
                 }
 
                 Section {
-                    BranchTreeRows(nodes: branchTree(matchingRemoteBranches), scope: .remote)
+                    BranchTreeRows(nodes: branchNodes(matchingRemoteBranches), scope: .remote)
                 } header: {
                     sectionHeader("Remote") { repository.showsAddRemote = true }
                 }
@@ -748,18 +751,17 @@ private struct SidebarView: View {
                                     .foregroundStyle(.tertiary)
                             }
                             .frame(height: 22)
-                            .tag("stash:\(stash.index)")
+                            .tag("stash:\(stash.id)")
                             .contentShape(Rectangle())
-                            .onTapGesture {
-                                selectedItem = "stash:\(stash.index)"
-                                repository.selectStash(stash)
-                            }
                             .help(stash.reference)
                             .contextMenu {
                                 Button("Apply") { repository.applyStash(stash.index, pop: false) }
+                                    .disabled(repository.operation != nil || repository.isBusy)
                                 Button("Pop") { repository.applyStash(stash.index, pop: true) }
+                                    .disabled(repository.operation != nil || repository.isBusy)
                                 Divider()
                                 Button("Drop", role: .destructive) { repository.dropStash(stash.index) }
+                                    .disabled(repository.operation != nil || repository.isBusy)
                             }
                         }
                     }
@@ -813,12 +815,26 @@ private struct SidebarView: View {
             .onChange(of: repository.branch) { _, branch in
                 selectedItem = "local:\(branch)"
             }
+            .onChange(of: selectedItem) { _, item in
+                guard let item, item.hasPrefix("stash:") else { return }
+                let identifier = String(item.dropFirst("stash:".count))
+                guard let stash = repository.stashes.first(where: { $0.id == identifier }),
+                      repository.selectedStash?.reference != stash.reference else { return }
+                repository.selectStash(stash)
+            }
         }
     }
 
     private func matching(_ branches: [String]) -> [String] {
         let query = branchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         return query.isEmpty ? branches : branches.filter { $0.localizedCaseInsensitiveContains(query) }
+    }
+
+    private func branchNodes(_ branches: [String]) -> [BranchTreeNode] {
+        guard isSearchingBranches else { return branchTree(branches) }
+        return branches.sorted { $0.localizedStandardCompare($1) == .orderedAscending }.map { branch in
+            BranchTreeNode(id: "branch:\(branch)", name: branch, branch: branch, children: [])
+        }
     }
 
     private func sectionHeader(_ title: String, action: @escaping () -> Void) -> some View {
@@ -852,6 +868,9 @@ private func branchTree(_ branches: [String], prefix: String = "") -> [BranchTre
     let groups = Dictionary(grouping: branches) { $0.split(separator: "/", maxSplits: 1).first.map(String.init) ?? $0 }
     return groups.keys.map { name in
         let fullName = prefix.isEmpty ? name : "\(prefix)/\(name)"
+        let hasExactBranch = groups[name, default: []].contains { branch in
+            branch.split(separator: "/", maxSplits: 1).count == 1
+        }
         let suffixes = groups[name, default: []].compactMap { branch -> String? in
             let parts = branch.split(separator: "/", maxSplits: 1)
             return parts.count == 2 ? String(parts[1]) : nil
@@ -859,7 +878,7 @@ private func branchTree(_ branches: [String], prefix: String = "") -> [BranchTre
         return BranchTreeNode(
             id: suffixes.isEmpty ? "branch:\(fullName)" : "folder:\(fullName)",
             name: name,
-            branch: suffixes.isEmpty ? fullName : nil,
+            branch: hasExactBranch ? fullName : nil,
             children: branchTree(suffixes, prefix: fullName)
         )
     }.sorted {
@@ -877,8 +896,8 @@ private struct BranchTreeRows: View {
 
     var body: some View {
         ForEach(nodes) { node in
-            if let branch = node.branch {
-                BranchRow(name: node.name, isCurrent: scope == .local && branch == repository.branch)
+            if node.children.isEmpty, let branch = node.branch {
+                BranchRow(name: node.name, fullName: branch, isCurrent: scope == .local && branch == repository.branch)
                     .tag("\(scope == .local ? "local" : "remote"):\(branch)")
                     .contentShape(Rectangle())
                     .onTapGesture(count: 2) { switchTo(branch) }
@@ -887,8 +906,30 @@ private struct BranchTreeRows: View {
                 DisclosureGroup {
                     BranchTreeRows(nodes: node.children, scope: scope)
                 } label: {
-                    Label(node.name, systemImage: scope == .remote && node.id.count == "folder:".count + node.name.count ? "externaldrive" : "folder")
+                    HStack(spacing: 6) {
+                        Label(
+                            node.name,
+                            systemImage: scope == .remote && node.id.count == "folder:".count + node.name.count
+                                ? "externaldrive" : "folder"
+                        )
                         .lineLimit(1)
+                        .truncationMode(.middle)
+                        if scope == .local, node.branch == repository.branch {
+                            Spacer(minLength: 4)
+                            Text("HEAD")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                .tag(node.branch.map { "\(scope == .local ? "local" : "remote"):\($0)" } ?? node.id)
+                .contentShape(Rectangle())
+                .onTapGesture(count: 2) {
+                    if let branch = node.branch { switchTo(branch) }
+                }
+                .help(node.id.replacingOccurrences(of: "folder:", with: ""))
+                .contextMenu {
+                    if let branch = node.branch { branchMenu(branch) }
                 }
             }
         }
@@ -941,11 +982,14 @@ private struct LocalBranchMenu: View {
 
 private struct BranchRow: View {
     let name: String
+    let fullName: String
     let isCurrent: Bool
 
     var body: some View {
         HStack {
-            Text(name).lineLimit(1)
+            Text(name)
+                .lineLimit(1)
+                .truncationMode(.middle)
             Spacer(minLength: 4)
             if isCurrent {
                 Text("HEAD")
@@ -955,6 +999,7 @@ private struct BranchRow: View {
         }
         .font(.callout)
         .frame(height: 22)
+        .help(fullName)
     }
 }
 
@@ -1135,9 +1180,12 @@ private struct StashInspector: View {
                         Spacer(minLength: 8)
                         Menu {
                             Button("Apply") { repository.applyStash(stash.index, pop: false) }
+                                .disabled(repository.operation != nil || repository.isBusy)
                             Button("Pop") { repository.applyStash(stash.index, pop: true) }
+                                .disabled(repository.operation != nil || repository.isBusy)
                             Divider()
                             Button("Drop", role: .destructive) { repository.dropStash(stash.index) }
+                                .disabled(repository.operation != nil || repository.isBusy)
                         } label: {
                             Image(systemName: "ellipsis")
                                 .frame(width: 22, height: 22)
@@ -1550,6 +1598,10 @@ private struct FileDiffView: View {
 private struct CommitList: View {
     @Environment(RepositoryStore.self) private var repository
 
+    private var isFiltering: Bool {
+        !repository.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     private var visibleRows: [CommitGraphRow] {
         let query = repository.searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         let rows = commitGraphRows(repository.commits)
@@ -1569,59 +1621,92 @@ private struct CommitList: View {
             get: { repository.selectedCommitIDs },
             set: { repository.updateCommitSelection($0, ordered: visibleIDs) }
         )
-        let laneCount = rows.map { max($0.topLanes.count, $0.bottomLanes.count) }.max() ?? 1
-        let laneSpacing = laneCount > 1 ? min(16, 104 / CGFloat(laneCount - 1)) : 16
+        let laneCount = isFiltering
+            ? 1
+            : rows.map { max($0.topLanes.count, $0.bottomLanes.count) }.max() ?? 1
+        let laneSpacing = laneCount > 1 ? min(18, 220 / CGFloat(laneCount - 1)) : 18
+        let graphWidth = max(28, min(240, CGFloat(max(0, laneCount - 1)) * laneSpacing + 20))
 
         List(rows, selection: selection) { row in
             let commit = row.commit
             HStack(spacing: 8) {
-                CommitReferences(references: commit.references)
-                CommitGraph(row: row, spacing: laneSpacing)
+                CommitGraph(
+                    row: row,
+                    spacing: laneSpacing,
+                    width: graphWidth,
+                    hidesConnections: isFiltering
+                )
                 Text(commit.subject)
                     .foregroundStyle(.primary)
-                    .fontWeight(.medium)
+                    .fontWeight(commit.isStash ? .semibold : .medium)
                     .lineLimit(1)
+                    .help(commit.subject)
                     .layoutPriority(1)
+                Spacer(minLength: 2)
+                CommitReferences(commit: commit)
+                    .layoutPriority(2)
             }
             .font(.caption)
             .foregroundStyle(.secondary)
-            .frame(height: 24)
+            .frame(height: 28)
             .listRowInsets(EdgeInsets(top: 0, leading: 8, bottom: 0, trailing: 8))
             .listRowSeparator(.hidden)
+            .listRowBackground(commit.isStash ? Color.purple.opacity(0.07) : Color.clear)
             .contextMenu {
-                let selected = repository.selectedCommitIDs.contains(commit.id)
-                    ? rows.map(\.commit).filter { repository.selectedCommitIDs.contains($0.id) }
-                    : [commit]
-                Button(selected.count > 1 ? "Cherry-Pick \(selected.count) Commits" : "Cherry-Pick \(String(commit.id.prefix(8)))") {
-                    repository.cherryPick(selected)
-                }
-                .disabled(repository.operation != nil)
-                if selected.count > 1 {
-                    Button("Squash \(selected.count) Commits…") {
-                        repository.prepareSquash(selected)
+                if commit.isStash {
+                    if let stash = repository.stash(matching: commit.id) {
+                        Button("View Stash Details", systemImage: "shippingbox") {
+                            repository.selectStash(stash)
+                        }
+                        Button("Apply Stash") { repository.applyStash(stash.index, pop: false) }
+                            .disabled(repository.operation != nil || repository.isBusy)
+                        Button("Pop Stash") { repository.applyStash(stash.index, pop: true) }
+                            .disabled(repository.operation != nil || repository.isBusy)
+                    }
+                    Divider()
+                    Button("Copy Stash Commit Hash") { copyCommitHash(commit) }
+                } else {
+                    let selected = repository.selectedCommitIDs.contains(commit.id)
+                        ? rows.map(\.commit).filter { repository.selectedCommitIDs.contains($0.id) }
+                        : [commit]
+                    Button(selected.count > 1 ? "Cherry-Pick \(selected.count) Commits" : "Cherry-Pick \(String(commit.id.prefix(8)))") {
+                        repository.cherryPick(selected)
                     }
                     .disabled(repository.operation != nil)
-                    Divider()
-                }
-                Button("Revert Commit") { repository.revert(commit) }
-                    .disabled(repository.operation != nil)
-                Button("Create Tag…") { repository.taggingCommit = commit }
-                Menu("Reset Current Branch") {
-                    Button("Soft") { repository.reset(to: commit, mode: "--soft") }
-                    Button("Mixed") { repository.reset(to: commit, mode: "--mixed") }
-                    Button("Hard…", role: .destructive) { repository.pendingHardReset = commit }
-                }
-                Button("Copy Commit Hash") {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(commit.id, forType: .string)
+                    if selected.count > 1 {
+                        Button("Squash \(selected.count) Commits…") {
+                            repository.prepareSquash(selected)
+                        }
+                        .disabled(repository.operation != nil)
+                        Divider()
+                    }
+                    Button("Revert Commit") { repository.revert(commit) }
+                        .disabled(repository.operation != nil)
+                    Button("Create Tag…") { repository.taggingCommit = commit }
+                    Menu("Reset Current Branch") {
+                        Button("Soft") { repository.reset(to: commit, mode: "--soft") }
+                        Button("Mixed") { repository.reset(to: commit, mode: "--mixed") }
+                        Button("Hard…", role: .destructive) { repository.pendingHardReset = commit }
+                    }
+                    Button("Copy Commit Hash") { copyCommitHash(commit) }
                 }
             }
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
-        .environment(\.defaultMinListRowHeight, 24)
+        .environment(\.defaultMinListRowHeight, 28)
         .searchable(text: $repository.searchText, prompt: "Search commits")
+        .onChange(of: visibleIDs) { _, ids in
+            let visibleSelection = repository.selectedCommitIDs.intersection(ids)
+            guard visibleSelection != repository.selectedCommitIDs else { return }
+            repository.updateCommitSelection(visibleSelection, ordered: ids)
+        }
         .task(id: repository.selection) { repository.selectCommit(repository.selection) }
+    }
+
+    private func copyCommitHash(_ commit: Commit) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(commit.id, forType: .string)
     }
 
 }
@@ -1667,46 +1752,277 @@ private struct CommitHoverDetails: ViewModifier {
     }
 }
 
+private enum CommitReferenceKind: Int {
+    case stash
+    case current
+    case local
+    case tag
+    case remote
+    case other
+
+    var title: String {
+        switch self {
+        case .stash: "Stash"
+        case .current: "Current branch"
+        case .local: "Local branch"
+        case .tag: "Tag"
+        case .remote: "Remote branch"
+        case .other: "Reference"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .stash: "shippingbox.fill"
+        case .current: "location.fill"
+        case .local: "arrow.triangle.branch"
+        case .tag: "tag.fill"
+        case .remote: "cloud.fill"
+        case .other: "bookmark.fill"
+        }
+    }
+
+    var tint: Color {
+        switch self {
+        case .stash: .purple
+        case .current: .green
+        case .local: .accentColor
+        case .tag: .orange
+        case .remote: .indigo
+        case .other: .gray
+        }
+    }
+}
+
+private struct CommitReferencePresentation: Identifiable {
+    let rawValue: String
+    let name: String
+    let kind: CommitReferenceKind
+    let isSuppressed: Bool
+    let order: Int
+    var id: String { "\(order):\(rawValue)" }
+}
+
 private struct CommitReferences: View {
     @Environment(RepositoryStore.self) private var repository
-    let references: [String]
+    let commit: Commit
 
     var body: some View {
-        HStack(spacing: 3) {
-            if let reference = references.first {
-                Text(clean(reference))
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 3)
-                    .background(reference.hasPrefix("tag: ") ? Color.orange : Color.accentColor, in: Capsule())
-                    .contentShape(Capsule())
-                    .onTapGesture(count: 2, perform: checkOut)
-                if references.count > 1 {
-                    Text("+\(references.count - 1)")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+        let allReferences = presentations
+        let visibleReferences = compact(allReferences)
+
+        if let primary = visibleReferences.first {
+            Menu {
+                ForEach(allReferences) { reference in
+                    referenceAction(reference)
                 }
+                Divider()
+                Button("Copy All References", systemImage: "doc.on.doc") {
+                    copy(allReferences.map(\.name).joined(separator: "\n"))
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: primary.kind.icon)
+                        .font(.caption2.weight(.semibold))
+                    Text(primary.kind == .stash ? "Stash" : primary.name)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .frame(maxWidth: 190)
+                    if coLocatedRemoteCount(for: primary, in: allReferences) > 0 {
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                            .font(.system(size: 8, weight: .bold))
+                            .help("Local and tracked remote point to this commit")
+                    }
+                    if visibleReferences.count > 1 {
+                        Text("+\(visibleReferences.count - 1)")
+                            .font(.caption2.monospacedDigit())
+                    }
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 7, weight: .bold))
+                        .opacity(0.72)
+                }
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(primary.kind == .remote ? primary.kind.tint : Color.white)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 3)
+                .background(
+                    primary.kind.tint.opacity(primary.kind == .remote ? 0.16 : 0.88),
+                    in: Capsule()
+                )
+                .overlay {
+                    Capsule()
+                        .strokeBorder(
+                            primary.kind.tint.opacity(primary.kind == .remote ? 0.65 : 0),
+                            lineWidth: 1
+                        )
+                }
+                .contentShape(Capsule())
+            }
+            .menuIndicator(.hidden)
+            .menuStyle(.borderlessButton)
+            .frame(maxWidth: 220)
+            .help(helpText(for: allReferences))
+        }
+    }
+
+    private var presentations: [CommitReferencePresentation] {
+        let values = if commit.referenceDetails.isEmpty {
+            commit.references.enumerated().map { index, reference in
+                let name = clean(reference)
+                return CommitReferencePresentation(
+                    rawValue: reference,
+                    name: name,
+                    kind: kind(of: reference, named: name),
+                    isSuppressed: false,
+                    order: index
+                )
+            }
+        } else {
+            commit.referenceDetails.enumerated().map { index, reference in
+                CommitReferencePresentation(
+                    rawValue: reference.fullName,
+                    name: reference.name,
+                    kind: kind(of: reference),
+                    isSuppressed: reference.isSuppressed,
+                    order: index
+                )
             }
         }
-        .frame(width: 118, alignment: .trailing)
-        .help(references.joined(separator: "\n"))
+        return values
+        .sorted {
+            if $0.kind.rawValue != $1.kind.rawValue { return $0.kind.rawValue < $1.kind.rawValue }
+            return $0.order < $1.order
+        }
+    }
+
+    private func compact(_ references: [CommitReferencePresentation]) -> [CommitReferencePresentation] {
+        let localNames = Set(references.compactMap { reference in
+            reference.kind == .local || reference.kind == .current ? reference.name : nil
+        })
+        return references.filter { reference in
+            guard !reference.isSuppressed else { return false }
+            guard reference.kind == .remote else { return true }
+            if !commit.referenceDetails.isEmpty { return true }
+            return !localNames.contains(localName(forRemote: reference.name))
+        }
     }
 
     private func clean(_ reference: String) -> String {
-        reference
-            .replacingOccurrences(of: "HEAD -> ", with: "")
-            .replacingOccurrences(of: "tag: ", with: "")
+        var name = reference.trimmingCharacters(in: .whitespacesAndNewlines)
+        for prefix in ["HEAD -> ", "tag: ", "refs/heads/", "refs/remotes/", "refs/tags/"] where name.hasPrefix(prefix) {
+            name.removeFirst(prefix.count)
+            break
+        }
+        return name
     }
 
-    private func checkOut() {
-        let names = references.map(clean)
-        if let branch = names.first(where: { repository.branches.contains($0) }) {
-            repository.switchBranch(branch)
-        } else if let branch = names.first(where: { repository.remoteBranches.contains($0) }) {
-            repository.switchRemoteBranch(branch)
+    private func kind(of reference: String, named name: String) -> CommitReferenceKind {
+        let normalized = reference.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if normalized == "stash" || normalized == "refs/stash" ||
+            normalized.hasPrefix("stash@{") || normalized.hasPrefix("stash: ") {
+            return .stash
         }
+        if normalized == "head" { return .other }
+        if normalized.hasPrefix("head -> ") { return .current }
+        if normalized.hasPrefix("tag: ") || normalized.hasPrefix("refs/tags/") { return .tag }
+        if normalized.hasPrefix("refs/heads/") || repository.branches.contains(name) { return .local }
+        if normalized.hasPrefix("refs/remotes/") || repository.remoteBranches.contains(name) { return .remote }
+        if let remote = name.split(separator: "/", maxSplits: 1).first.map(String.init),
+           repository.remotes.contains(remote) {
+            return .remote
+        }
+        return .other
+    }
+
+    private func kind(of reference: CommitReference) -> CommitReferenceKind {
+        if reference.kind == "head" { return .other }
+        if reference.isCurrent { return .current }
+        return switch reference.kind {
+        case "localBranch": .local
+        case "remoteBranch": .remote
+        case "tag": .tag
+        case "stash": .stash
+        default: .other
+        }
+    }
+
+    private func localName(forRemote name: String) -> String {
+        let parts = name.split(separator: "/", maxSplits: 1)
+        return parts.count == 2 ? String(parts[1]) : name
+    }
+
+    private func coLocatedRemoteCount(
+        for primary: CommitReferencePresentation,
+        in references: [CommitReferencePresentation]
+    ) -> Int {
+        guard primary.kind == .current || primary.kind == .local else { return 0 }
+        if !commit.referenceDetails.isEmpty {
+            return references.count {
+                $0.kind == .remote && $0.isSuppressed && !$0.name.hasSuffix("/HEAD")
+            }
+        }
+        return references.count {
+            $0.kind == .remote && localName(forRemote: $0.name) == primary.name
+        }
+    }
+
+    @ViewBuilder
+    private func referenceAction(_ reference: CommitReferencePresentation) -> some View {
+        switch reference.kind {
+        case .current, .local:
+            Button {
+                repository.switchBranch(reference.name)
+            } label: {
+                Label("\(reference.kind.title): \(reference.name)", systemImage: reference.kind.icon)
+            }
+            .disabled(
+                reference.name == repository.branch ||
+                    repository.operation != nil || repository.isBusy
+            )
+        case .remote:
+            if reference.isSuppressed || reference.name.hasSuffix("/HEAD") {
+                Button {
+                    copy(reference.name)
+                } label: {
+                    Label(
+                        "Copy \(reference.name.hasSuffix("/HEAD") ? "Remote Default" : "Tracked Remote"): \(reference.name)",
+                        systemImage: "doc.on.doc"
+                    )
+                }
+            } else {
+                Button {
+                    repository.switchRemoteBranch(reference.name)
+                } label: {
+                    Label("Check Out Remote: \(reference.name)", systemImage: reference.kind.icon)
+                }
+                .disabled(repository.operation != nil || repository.isBusy)
+            }
+        case .stash, .tag, .other:
+            Button {
+                copy(reference.name)
+            } label: {
+                Label("Copy \(reference.kind.title): \(reference.name)", systemImage: reference.kind.icon)
+            }
+        }
+    }
+
+    private func helpText(for references: [CommitReferencePresentation]) -> String {
+        references.map {
+            let detail = if $0.name.hasSuffix("/HEAD") {
+                " (remote default alias)"
+            } else if $0.isSuppressed {
+                " (tracks local branch)"
+            } else {
+                ""
+            }
+            return "\($0.kind.title): \($0.name)\(detail)"
+        }
+        .joined(separator: "\n")
+    }
+
+    private func copy(_ value: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(value, forType: .string)
     }
 }
 
@@ -1796,6 +2112,7 @@ private actor GitHubAvatarResolver {
 private struct CommitAvatar: View {
     @Environment(RepositoryStore.self) private var repository
     let commit: Commit
+    let borderColor: Color
     @State private var resolvedAvatarURL: URL?
 
     var body: some View {
@@ -1806,16 +2123,16 @@ private struct CommitAvatar: View {
                     .scaledToFill()
                     .background(.background, in: Circle())
                     .clipShape(Circle())
-                    .overlay(Circle().stroke(Color.accentColor, lineWidth: 1.5))
+                    .overlay(Circle().stroke(borderColor, lineWidth: 1.5))
             } else {
                 Circle()
-                    .fill(Color.accentColor.opacity(0.22))
+                    .fill(borderColor.opacity(0.22))
                     .overlay {
                         Text(String(commit.author.prefix(1)).uppercased())
                             .font(.system(size: 9, weight: .bold))
-                            .foregroundStyle(.tint)
+                            .foregroundStyle(borderColor)
                     }
-                    .overlay(Circle().stroke(Color.accentColor, lineWidth: 1.5))
+                    .overlay(Circle().stroke(borderColor, lineWidth: 1.5))
             }
         }
         .frame(width: 18, height: 18)
@@ -1848,23 +2165,69 @@ private struct CommitAvatar: View {
     }
 }
 
+private let commitGraphColors: [Color] = [
+    .blue, .purple, .orange, .green, .pink, .cyan, .indigo, .mint
+]
+
+private struct CommitGraphLane: Equatable {
+    let commitID: String
+    let colorIndex: Int
+}
+
 private struct CommitGraphRow: Identifiable {
     let commit: Commit
-    let topLanes: [String]
-    let bottomLanes: [String]
+    let topLanes: [CommitGraphLane]
+    let bottomLanes: [CommitGraphLane]
     let nodeLane: Int
     var id: String { commit.id }
 }
 
 private func commitGraphRows(_ commits: [Commit]) -> [CommitGraphRow] {
-    var lanes: [String] = []
+    var lanes: [CommitGraphLane] = []
+    var nextColorIndex = 0
+
+    func takeColor(used: Set<Int>) -> Int {
+        for offset in 0..<commitGraphColors.count {
+            let candidate = (nextColorIndex + offset) % commitGraphColors.count
+            if !used.contains(candidate) {
+                nextColorIndex = (candidate + 1) % commitGraphColors.count
+                return candidate
+            }
+        }
+        let candidate = nextColorIndex % commitGraphColors.count
+        nextColorIndex = (nextColorIndex + 1) % commitGraphColors.count
+        return candidate
+    }
+
     return commits.map { commit in
-        if !lanes.contains(commit.id) { lanes.insert(commit.id, at: 0) }
+        if !lanes.contains(where: { $0.commitID == commit.id }) {
+            lanes.insert(
+                CommitGraphLane(
+                    commitID: commit.id,
+                    colorIndex: takeColor(used: Set(lanes.map(\.colorIndex)))
+                ),
+                at: 0
+            )
+        }
         let top = lanes
-        let nodeLane = lanes.firstIndex(of: commit.id) ?? 0
-        lanes.remove(at: nodeLane)
-        for parent in commit.parents { lanes.removeAll { $0 == parent } }
-        lanes.insert(contentsOf: commit.parents, at: min(nodeLane, lanes.count))
+        let nodeLane = lanes.firstIndex(where: { $0.commitID == commit.id }) ?? 0
+        let node = lanes.remove(at: nodeLane)
+        var parentLanes: [CommitGraphLane] = []
+
+        for (index, parent) in commit.parents.enumerated() {
+            if let existingIndex = lanes.firstIndex(where: { $0.commitID == parent }) {
+                parentLanes.append(lanes.remove(at: existingIndex))
+            } else if index == 0 {
+                parentLanes.append(CommitGraphLane(commitID: parent, colorIndex: node.colorIndex))
+            } else {
+                let used = Set((lanes + parentLanes).map(\.colorIndex))
+                parentLanes.append(
+                    CommitGraphLane(commitID: parent, colorIndex: takeColor(used: used))
+                )
+            }
+        }
+
+        lanes.insert(contentsOf: parentLanes, at: min(nodeLane, lanes.count))
         return CommitGraphRow(commit: commit, topLanes: top, bottomLanes: lanes, nodeLane: nodeLane)
     }
 }
@@ -1872,57 +2235,117 @@ private func commitGraphRows(_ commits: [Commit]) -> [CommitGraphRow] {
 private struct CommitGraph: View {
     let row: CommitGraphRow
     let spacing: CGFloat
-    private let colors: [Color] = [
-        .blue.opacity(0.86), .purple.opacity(0.78), .orange.opacity(0.8), .green.opacity(0.78),
-        .pink.opacity(0.74), .cyan.opacity(0.76), .indigo.opacity(0.8), .mint.opacity(0.76)
-    ]
+    let width: CGFloat
+    let hidesConnections: Bool
 
     var body: some View {
+        let displayedNodeLane = hidesConnections ? 0 : row.nodeLane
+        let nodeColorIndex = row.topLanes.indices.contains(row.nodeLane)
+            ? row.topLanes[row.nodeLane].colorIndex
+            : 0
+        let nodeColor = color(nodeColorIndex)
+        let showsDetailedNode = spacing >= 14
+
         ZStack(alignment: .topLeading) {
             Canvas { context, size in
                 let centerY = size.height / 2
-                let color = colors[row.nodeLane % colors.count]
+                let stroke = StrokeStyle(
+                    lineWidth: max(1.4, min(2.2, spacing / 6)),
+                    lineCap: .round,
+                    lineJoin: .round
+                )
 
-                for (topLane, hash) in row.topLanes.enumerated() where hash != row.commit.id {
-                    guard let bottomLane = row.bottomLanes.firstIndex(of: hash) else { continue }
-                    var path = Path()
-                    path.move(to: point(topLane, -1))
-                    path.addCurve(
-                        to: point(bottomLane, size.height + 1),
-                        control1: point(topLane, size.height * 0.45),
-                        control2: point(bottomLane, size.height * 0.55)
-                    )
-                    context.stroke(path, with: .color(colors[topLane % colors.count].opacity(0.72)), lineWidth: 2)
+                if !hidesConnections {
+                    for (topLane, lane) in row.topLanes.enumerated() where lane.commitID != row.commit.id {
+                        guard let bottomLane = row.bottomLanes.firstIndex(where: { $0.commitID == lane.commitID }) else {
+                            continue
+                        }
+                        var path = Path()
+                        path.move(to: point(topLane, -1))
+                        path.addCurve(
+                            to: point(bottomLane, size.height + 1),
+                            control1: point(topLane, size.height * 0.38),
+                            control2: point(bottomLane, size.height * 0.62)
+                        )
+                        context.stroke(
+                            path,
+                            with: .color(color(lane.colorIndex).opacity(0.88)),
+                            style: stroke
+                        )
+                    }
+
+                    var incoming = Path()
+                    incoming.move(to: point(row.nodeLane, -1))
+                    incoming.addLine(to: point(row.nodeLane, centerY))
+                    context.stroke(incoming, with: .color(nodeColor), style: stroke)
+
+                    for parent in row.commit.parents {
+                        guard let lane = row.bottomLanes.firstIndex(where: { $0.commitID == parent }) else {
+                            continue
+                        }
+                        var path = Path()
+                        path.move(to: point(row.nodeLane, centerY))
+                        path.addCurve(
+                            to: point(lane, size.height + 1),
+                            control1: point(row.nodeLane, size.height * 0.58),
+                            control2: point(lane, size.height * 0.78)
+                        )
+                        context.stroke(
+                            path,
+                            with: .color(color(row.bottomLanes[lane].colorIndex)),
+                            style: stroke
+                        )
+                    }
                 }
 
-                var incoming = Path()
-                incoming.move(to: point(row.nodeLane, -1))
-                incoming.addLine(to: point(row.nodeLane, centerY))
-                context.stroke(incoming, with: .color(color), lineWidth: 2)
-
-                for parent in row.commit.parents {
-                    guard let lane = row.bottomLanes.firstIndex(of: parent) else { continue }
-                    var path = Path()
-                    path.move(to: point(row.nodeLane, centerY))
-                    path.addCurve(
-                        to: point(lane, size.height + 1),
-                        control1: point(row.nodeLane, size.height * 0.55),
-                        control2: point(lane, size.height * 0.72)
-                    )
-                    context.stroke(path, with: .color(colors[lane % colors.count]), lineWidth: 2)
-                }
-
-                let node = CGRect(x: x(row.nodeLane) - 5, y: centerY - 5, width: 10, height: 10)
-                context.fill(Path(ellipseIn: node), with: .color(color))
-                context.stroke(Path(ellipseIn: node), with: .color(.white.opacity(0.75)), lineWidth: 1.5)
+                let nodeSize = showsDetailedNode ? 10 : max(2, min(8, spacing * 0.65))
+                let node = CGRect(
+                    x: x(displayedNodeLane) - nodeSize / 2,
+                    y: centerY - nodeSize / 2,
+                    width: nodeSize,
+                    height: nodeSize
+                )
+                let nodePath = row.commit.isStash
+                    ? Path(roundedRect: node, cornerRadius: max(1, nodeSize * 0.24))
+                    : Path(ellipseIn: node)
+                context.fill(nodePath, with: .color(row.commit.isStash ? .purple : nodeColor))
+                context.stroke(nodePath, with: .color(.white.opacity(0.75)), lineWidth: showsDetailedNode ? 1.5 : 0.75)
             }
-            CommitAvatar(commit: row.commit)
-                .modifier(CommitHoverDetails(commit: row.commit))
-                .offset(x: x(row.nodeLane) - 9, y: 3)
+            if showsDetailedNode {
+                Group {
+                    if row.commit.isStash {
+                        RoundedRectangle(cornerRadius: 5)
+                            .fill(Color.purple)
+                            .overlay {
+                                Image(systemName: "shippingbox.fill")
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundStyle(.white)
+                            }
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 5)
+                                    .stroke(Color.white.opacity(0.78), lineWidth: 1.25)
+                            }
+                            .frame(width: 19, height: 19)
+                    } else {
+                        CommitAvatar(commit: row.commit, borderColor: nodeColor)
+                    }
+                }
+                .offset(x: x(displayedNodeLane) - 9, y: 5)
+            }
         }
-        .frame(width: 120)
-        .frame(height: 24)
-        .accessibilityHidden(true)
+        .frame(width: width)
+        .frame(height: 28)
+        .modifier(CommitHoverDetails(commit: row.commit))
+        .help(hidesConnections ? "Graph connections are hidden while filtering commits" : "")
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(row.commit.isStash ? "Stash graph node" : "Commit graph node")
+        .accessibilityValue(
+            "Lane \(displayedNodeLane + 1), \(row.commit.parents.count) parent\(row.commit.parents.count == 1 ? "" : "s")"
+        )
+    }
+
+    private func color(_ index: Int) -> Color {
+        commitGraphColors[index % commitGraphColors.count]
     }
 
     private func x(_ lane: Int) -> CGFloat { CGFloat(lane) * spacing + 8 }

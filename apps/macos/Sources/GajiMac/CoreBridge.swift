@@ -30,10 +30,20 @@ struct CoreGraphCommit: Decodable {
     let id: String
     let parents: [String]
     let references: [String]
+    let referenceDetails: [CoreGraphReference]?
+    let isStash: Bool?
     let author: String
     let authorEmail: String
     let authoredAt: String
     let subject: String
+}
+
+struct CoreGraphReference: Decodable {
+    let name: String
+    let fullName: String
+    let kind: String
+    let isCurrent: Bool
+    let isSuppressed: Bool
 }
 
 struct CoreCommitFileChange: Decodable, Identifiable {
@@ -113,9 +123,10 @@ struct CoreSubmodule: Decodable, Identifiable {
 
 struct CoreStash: Decodable, Identifiable {
     let index: Int
+    let commit: String?
     let reference: String
     let subject: String
-    var id: String { reference }
+    var id: String { commit ?? reference }
 }
 
 private struct CoreEnvelope<Value: Decodable>: Decodable {

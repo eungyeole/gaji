@@ -1,3 +1,4 @@
+use std::collections::{HashMap, HashSet};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -50,6 +51,7 @@ pub struct RemoteSummary {
 #[serde(rename_all = "camelCase")]
 pub struct StashSummary {
     pub index: usize,
+    pub commit: String,
     pub reference: String,
     pub subject: String,
 }
@@ -63,12 +65,45 @@ pub struct HistoryEntry {
     pub subject: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum GraphCommitKind {
+    Commit,
+    Stash,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum GraphReferenceKind {
+    Head,
+    LocalBranch,
+    RemoteBranch,
+    Tag,
+    Stash,
+    Other,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GraphReference {
+    pub name: String,
+    pub full_name: String,
+    pub kind: GraphReferenceKind,
+    pub is_current: bool,
+    pub is_suppressed: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GraphCommit {
     pub id: String,
     pub parents: Vec<String>,
+    /// Compact, display-oriented decorations kept for API compatibility.
     pub references: Vec<String>,
+    /// All refs for this commit, including remote aliases suppressed from `references`.
+    pub reference_details: Vec<GraphReference>,
+    pub kind: GraphCommitKind,
+    pub is_stash: bool,
     pub author: String,
     pub author_email: String,
     pub authored_at: String,
@@ -422,19 +457,20 @@ pub fn push(
 
 pub fn stashes(path: impl AsRef<Path>) -> Result<Vec<StashSummary>, GajiError> {
     let root = root(path.as_ref())?;
-    let output = git(&root, &["stash", "list", "--format=%gd%x00%s%x00"])?;
+    let output = git(&root, &["stash", "list", "-z", "--format=%H%x00%gd%x00%s"])?;
     let fields: Vec<&str> = output.split('\0').collect();
     Ok(fields
-        .chunks(2)
+        .chunks(3)
         .enumerate()
         .filter_map(|(index, item)| {
-            if item.len() < 2 || item[0].is_empty() {
+            if item.len() < 3 || item[0].is_empty() {
                 return None;
             }
             Some(StashSummary {
                 index,
-                reference: item[0].to_owned(),
-                subject: item[1].to_owned(),
+                commit: item[0].to_owned(),
+                reference: item[1].to_owned(),
+                subject: item[2].to_owned(),
             })
         })
         .collect())
@@ -800,44 +836,274 @@ pub fn search_history(path: impl AsRef<Path>, query: &str) -> Result<Vec<History
 
 pub fn commit_graph(path: impl AsRef<Path>, limit: usize) -> Result<Vec<GraphCommit>, GajiError> {
     let root = root(path.as_ref())?;
-    let limit = limit.clamp(1, 10_000).to_string();
+    let limit = limit.clamp(1, 10_000);
+    let references = graph_references(&root)?;
+    let head_exists = match git(&root, &["rev-parse", "--verify", "HEAD"]) {
+        Ok(_) => true,
+        Err(GajiError::GitFailed(_)) => false,
+        Err(error) => return Err(error),
+    };
+    if references.is_empty() && !head_exists {
+        return Ok(Vec::new());
+    }
+
+    let stash_helpers = stash_helper_commits(&root, &references)?;
+    let helper_ids: HashSet<&str> = stash_helpers
+        .values()
+        .flatten()
+        .map(String::as_str)
+        .collect();
+    // Git counts the synthetic index/untracked stash parents towards `-n`. Read
+    // enough extra rows that removing those implementation details does not
+    // unexpectedly shorten the requested graph.
+    let log_limit = limit.saturating_add(helper_ids.len()).to_string();
+    // Commit metadata may contain other control characters, but Git's normal
+    // metadata inputs reject NULs. Use a NUL-delimited fixed six-field stream.
+    let mut arguments = vec![
+        "log",
+        "--all",
+        "--topo-order",
+        "--date=iso-strict",
+        "-z",
+        "-n",
+        &log_limit,
+        "--pretty=format:%H%x00%P%x00%an%x00%ae%x00%aI%x00%s",
+    ];
+    if head_exists {
+        // `--all` follows refs, but a detached HEAD need not have one.
+        arguments.push("HEAD");
+    }
+    let output = git(&root, &arguments)?;
+    let mut fields = output.split('\0');
+    let mut commits: Vec<_> = std::iter::from_fn(|| {
+        let id = fields.next()?;
+        if id.is_empty() {
+            return None;
+        }
+        let parents = fields.next()?;
+        let author = fields.next()?;
+        let author_email = fields.next()?;
+        let authored_at = fields.next()?;
+        let subject = fields.next()?;
+        let reference_details = references.get(id).cloned().unwrap_or_default();
+        let is_stash = reference_details
+            .iter()
+            .any(|reference| reference.kind == GraphReferenceKind::Stash);
+        Some(GraphCommit {
+            id: id.to_owned(),
+            parents: parents.split_whitespace().map(str::to_owned).collect(),
+            references: reference_details
+                .iter()
+                .filter(|reference| !reference.is_suppressed)
+                .map(graph_reference_label)
+                .collect(),
+            reference_details,
+            kind: if is_stash {
+                GraphCommitKind::Stash
+            } else {
+                GraphCommitKind::Commit
+            },
+            is_stash,
+            author: author.to_owned(),
+            author_email: author_email.to_owned(),
+            authored_at: authored_at.to_owned(),
+            subject: subject.to_owned(),
+        })
+    })
+    .collect();
+
+    for commit in &mut commits {
+        if let Some(helpers) = stash_helpers.get(&commit.id) {
+            commit.parents.truncate(1);
+            debug_assert!(
+                commit
+                    .parents
+                    .iter()
+                    .all(|parent| !helpers.contains(parent))
+            );
+        }
+    }
+    commits.retain(|commit| {
+        !helper_ids.contains(commit.id.as_str()) || !commit.reference_details.is_empty()
+    });
+    commits.truncate(limit);
+    Ok(commits)
+}
+
+fn graph_references(root: &Path) -> Result<HashMap<String, Vec<GraphReference>>, GajiError> {
+    let current_ref = match git(root, &["symbolic-ref", "--quiet", "HEAD"]) {
+        Ok(reference) => Some(reference.trim().to_owned()),
+        Err(GajiError::GitFailed(_)) => None,
+        Err(error) => return Err(error),
+    };
     let output = git(
-        &root,
+        root,
         &[
-            "log",
-            "--all",
-            "--topo-order",
-            "--date=iso-strict",
-            "-n",
-            &limit,
-            "--pretty=format:%H%x1f%P%x1f%D%x1f%an%x1f%ae%x1f%aI%x1f%s%x1e",
+            "for-each-ref",
+            "--format=%(objectname)%00%(*objectname)%00%(refname)%00%(upstream)%00%(symref)",
+            "refs/heads",
+            "refs/remotes",
+            "refs/tags",
+            "refs/stash",
         ],
     )?;
-    Ok(output
-        .split('\x1e')
+    let mut raw_references: Vec<_> = output
+        .lines()
         .filter_map(|record| {
-            let mut fields = record.trim().splitn(7, '\x1f');
-            Some(GraphCommit {
-                id: fields.next()?.to_owned(),
-                parents: fields
-                    .next()?
-                    .split_whitespace()
-                    .map(str::to_owned)
-                    .collect(),
-                references: fields
-                    .next()?
-                    .split(',')
-                    .map(str::trim)
-                    .filter(|reference| !reference.is_empty())
-                    .map(str::to_owned)
-                    .collect(),
-                author: fields.next()?.to_owned(),
-                author_email: fields.next()?.to_owned(),
-                authored_at: fields.next()?.to_owned(),
-                subject: fields.next()?.to_owned(),
+            let mut fields = record.splitn(5, '\0');
+            let object = fields.next()?;
+            let peeled = fields.next()?;
+            let full_name = fields.next()?;
+            let upstream = fields.next()?;
+            let symbolic_target = fields.next()?;
+            Some(RawGraphReference {
+                object: if peeled.is_empty() { object } else { peeled }.to_owned(),
+                full_name: full_name.to_owned(),
+                upstream: upstream.to_owned(),
+                symbolic_target: symbolic_target.to_owned(),
             })
         })
-        .collect())
+        .collect();
+
+    if current_ref.is_none() {
+        match git(root, &["rev-parse", "--verify", "HEAD"]) {
+            Ok(head) => raw_references.push(RawGraphReference {
+                object: head.trim().to_owned(),
+                full_name: "HEAD".to_owned(),
+                upstream: String::new(),
+                symbolic_target: String::new(),
+            }),
+            Err(GajiError::GitFailed(_)) => {}
+            Err(error) => return Err(error),
+        }
+    }
+
+    let objects_by_ref: HashMap<_, _> = raw_references
+        .iter()
+        .map(|reference| (reference.full_name.as_str(), reference.object.as_str()))
+        .collect();
+    let mut suppressed = HashSet::new();
+    for reference in &raw_references {
+        if reference.full_name.starts_with("refs/heads/")
+            && reference.upstream.starts_with("refs/remotes/")
+            && objects_by_ref.get(reference.upstream.as_str()) == Some(&reference.object.as_str())
+        {
+            suppressed.insert(reference.upstream.as_str());
+        }
+        if reference.full_name.starts_with("refs/remotes/")
+            && !reference.symbolic_target.is_empty()
+            && objects_by_ref.get(reference.symbolic_target.as_str())
+                == Some(&reference.object.as_str())
+        {
+            suppressed.insert(reference.full_name.as_str());
+        }
+    }
+
+    let mut by_commit: HashMap<String, Vec<GraphReference>> = HashMap::new();
+    for reference in &raw_references {
+        let kind = graph_reference_kind(&reference.full_name);
+        by_commit
+            .entry(reference.object.clone())
+            .or_default()
+            .push(GraphReference {
+                name: graph_reference_name(&reference.full_name).to_owned(),
+                full_name: reference.full_name.clone(),
+                kind,
+                is_current: current_ref.as_deref() == Some(reference.full_name.as_str())
+                    || kind == GraphReferenceKind::Head,
+                is_suppressed: suppressed.contains(reference.full_name.as_str()),
+            });
+    }
+    for references in by_commit.values_mut() {
+        references.sort_by(|left, right| {
+            graph_reference_sort_key(left)
+                .cmp(&graph_reference_sort_key(right))
+                .then_with(|| left.name.cmp(&right.name))
+        });
+    }
+    Ok(by_commit)
+}
+
+fn stash_helper_commits(
+    root: &Path,
+    references: &HashMap<String, Vec<GraphReference>>,
+) -> Result<HashMap<String, Vec<String>>, GajiError> {
+    let mut stash_helpers = HashMap::new();
+    for (commit, references) in references {
+        if !references
+            .iter()
+            .any(|reference| reference.kind == GraphReferenceKind::Stash)
+        {
+            continue;
+        }
+        let output = git(root, &["show", "-s", "--format=%P", commit])?;
+        let helpers = output
+            .split_whitespace()
+            .skip(1)
+            .map(str::to_owned)
+            .collect();
+        stash_helpers.insert(commit.clone(), helpers);
+    }
+    Ok(stash_helpers)
+}
+
+fn graph_reference_kind(full_name: &str) -> GraphReferenceKind {
+    if full_name == "HEAD" {
+        GraphReferenceKind::Head
+    } else if full_name.starts_with("refs/heads/") {
+        GraphReferenceKind::LocalBranch
+    } else if full_name.starts_with("refs/remotes/") {
+        GraphReferenceKind::RemoteBranch
+    } else if full_name.starts_with("refs/tags/") {
+        GraphReferenceKind::Tag
+    } else if full_name == "refs/stash" {
+        GraphReferenceKind::Stash
+    } else {
+        GraphReferenceKind::Other
+    }
+}
+
+fn graph_reference_name(full_name: &str) -> &str {
+    full_name
+        .strip_prefix("refs/heads/")
+        .or_else(|| full_name.strip_prefix("refs/remotes/"))
+        .or_else(|| full_name.strip_prefix("refs/tags/"))
+        .unwrap_or(full_name)
+}
+
+fn graph_reference_sort_key(reference: &GraphReference) -> u8 {
+    if reference.is_current {
+        return 0;
+    }
+    match reference.kind {
+        GraphReferenceKind::LocalBranch => 1,
+        GraphReferenceKind::Tag => 2,
+        GraphReferenceKind::RemoteBranch => 3,
+        GraphReferenceKind::Stash => 4,
+        GraphReferenceKind::Head => 0,
+        GraphReferenceKind::Other => 5,
+    }
+}
+
+fn graph_reference_label(reference: &GraphReference) -> String {
+    match reference.kind {
+        GraphReferenceKind::Head => "HEAD".to_owned(),
+        GraphReferenceKind::LocalBranch if reference.is_current => {
+            format!("HEAD -> {}", reference.name)
+        }
+        GraphReferenceKind::Tag => format!("tag: {}", reference.name),
+        GraphReferenceKind::Stash | GraphReferenceKind::Other => reference.full_name.clone(),
+        GraphReferenceKind::LocalBranch | GraphReferenceKind::RemoteBranch => {
+            reference.name.clone()
+        }
+    }
+}
+
+struct RawGraphReference {
+    object: String,
+    full_name: String,
+    upstream: String,
+    symbolic_target: String,
 }
 
 pub fn commit_files(

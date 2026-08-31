@@ -208,6 +208,115 @@ fn reads_history_blame_and_manages_worktrees() {
 }
 
 #[test]
+fn classifies_graph_references_and_suppresses_tracking_aliases() {
+    let repository = Repository::new();
+    repository.write("hello.txt", "hello\n");
+    gaji_core::stage(repository.path(), &["hello.txt"]).unwrap();
+    let head = gaji_core::commit(repository.path(), "initial", false).unwrap();
+    let long_branch = "feature/a-very-long-branch-name-that-must-remain-complete";
+    let comma_branch = "topic,with-comma";
+    repository.git(&["branch", long_branch]);
+    repository.git(&["branch", comma_branch]);
+    repository.git(&["branch", "local-follower"]);
+    repository.git(&["config", "branch.local-follower.remote", "."]);
+    repository.git(&["config", "branch.local-follower.merge", "refs/heads/main"]);
+    gaji_core::create_tag(repository.path(), "v1.0.0", "HEAD", Some("release")).unwrap();
+    repository.git(&["remote", "add", "origin", "."]);
+    repository.git(&["fetch", "-q", "origin", "main:refs/remotes/origin/main"]);
+    repository.git(&["branch", "--set-upstream-to", "origin/main", "main"]);
+    repository.git(&[
+        "symbolic-ref",
+        "refs/remotes/origin/HEAD",
+        "refs/remotes/origin/main",
+    ]);
+
+    let graph = gaji_core::commit_graph(repository.path(), 100).unwrap();
+    let commit = graph.iter().find(|commit| commit.id == head).unwrap();
+
+    assert!(commit.references.contains(&"HEAD -> main".to_owned()));
+    assert!(commit.references.contains(&long_branch.to_owned()));
+    assert!(commit.references.contains(&comma_branch.to_owned()));
+    assert!(commit.references.contains(&"local-follower".to_owned()));
+    assert!(commit.references.contains(&"tag: v1.0.0".to_owned()));
+    assert!(!commit.references.contains(&"origin/main".to_owned()));
+    assert!(!commit.references.contains(&"origin/HEAD".to_owned()));
+
+    let local = commit
+        .reference_details
+        .iter()
+        .find(|reference| reference.full_name == "refs/heads/main")
+        .unwrap();
+    assert_eq!(local.kind, gaji_core::GraphReferenceKind::LocalBranch);
+    assert!(local.is_current);
+    assert!(!local.is_suppressed);
+
+    let tracking = commit
+        .reference_details
+        .iter()
+        .find(|reference| reference.full_name == "refs/remotes/origin/main")
+        .unwrap();
+    assert_eq!(tracking.kind, gaji_core::GraphReferenceKind::RemoteBranch);
+    assert!(tracking.is_suppressed);
+    assert!(
+        commit
+            .reference_details
+            .iter()
+            .any(|reference| reference.name == long_branch)
+    );
+    assert!(
+        commit
+            .reference_details
+            .iter()
+            .any(|reference| reference.name == comma_branch)
+    );
+}
+
+#[test]
+fn identifies_stashes_and_hides_their_synthetic_helper_commits() {
+    let repository = Repository::new();
+    repository.write("hello.txt", "one\n");
+    gaji_core::stage(repository.path(), &["hello.txt"]).unwrap();
+    let base = gaji_core::commit(repository.path(), "initial", false).unwrap();
+    repository.write("hello.txt", "two\n");
+    repository.write("new.txt", "untracked\n");
+    gaji_core::stash_push(repository.path(), "work", true).unwrap();
+
+    let stash = repository.git(&["rev-parse", "refs/stash"]);
+    let index_snapshot = repository.git(&["rev-parse", "refs/stash^2"]);
+    let untracked_snapshot = repository.git(&["rev-parse", "refs/stash^3"]);
+    let graph = gaji_core::commit_graph(repository.path(), 100).unwrap();
+    let stash_commit = graph.iter().find(|commit| commit.id == stash).unwrap();
+
+    assert_eq!(stash_commit.kind, gaji_core::GraphCommitKind::Stash);
+    assert!(stash_commit.is_stash);
+    assert_eq!(stash_commit.parents, [base]);
+    assert_eq!(stash_commit.references, ["refs/stash"]);
+    assert!(stash_commit.reference_details.iter().any(|reference| {
+        reference.kind == gaji_core::GraphReferenceKind::Stash
+            && reference.full_name == "refs/stash"
+    }));
+    assert!(!graph.iter().any(|commit| commit.id == index_snapshot));
+    assert!(!graph.iter().any(|commit| commit.id == untracked_snapshot));
+    assert!(
+        graph
+            .iter()
+            .filter(|commit| commit.kind == gaji_core::GraphCommitKind::Commit)
+            .all(|commit| !commit.is_stash)
+    );
+}
+
+#[test]
+fn returns_an_empty_graph_for_an_unborn_repository() {
+    let repository = Repository::new();
+
+    assert!(
+        gaji_core::commit_graph(repository.path(), 100)
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[test]
 fn applies_hunks_and_clones_repositories() {
     let repository = Repository::new();
     repository.write("hello.txt", "first\n");
