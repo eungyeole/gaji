@@ -88,6 +88,9 @@ enum PullBehavior: String, CaseIterable {
 final class RepositoryStore {
     @ObservationIgnored private var fileLoadTask: Task<Void, Never>?
     @ObservationIgnored private var commitLoadTask: Task<Void, Never>?
+    @ObservationIgnored private var commitPageLoadTask: Task<Void, Never>?
+    @ObservationIgnored private var commitGraphGeneration = 0
+    @ObservationIgnored private var commitGraphPath: String?
     @ObservationIgnored private var operationTask: Task<Void, Never>?
     @ObservationIgnored private var repositoryWatcher: RepositoryFileWatcher?
     @ObservationIgnored private var repositoryRefreshTask: Task<Void, Never>?
@@ -101,6 +104,8 @@ final class RepositoryStore {
     private(set) var branch = ""
     private(set) var changes: [FileChange] = []
     private(set) var commits: [Commit] = []
+    private(set) var hasMoreCommits = false
+    private(set) var isLoadingMoreCommits = false
     private(set) var branches: [String] = []
     private(set) var remoteBranches: [String] = []
     private(set) var remotes: [String] = []
@@ -174,6 +179,8 @@ final class RepositoryStore {
     var checkedOutWorktreeBranches: Set<String> {
         Set(worktrees.compactMap(\.branch))
     }
+
+    private static let commitPageSize = 500
 
     init(restoreLastRepository: Bool = true) {
         pullBehavior = PullBehavior(rawValue: UserDefaults.standard.string(forKey: "pullBehavior") ?? "") ?? .rebase
@@ -262,6 +269,7 @@ final class RepositoryStore {
 
     func refresh() {
         guard let root else { return }
+        resetCommitPagination()
         workingFileCache.removeAll()
         do {
             let snapshot = try CoreBridge.inspect(root.path())
@@ -274,27 +282,19 @@ final class RepositoryStore {
                 )
             }
             if changes != updatedChanges { changes = updatedChanges }
-            let formatter = ISO8601DateFormatter()
-            let updatedCommits = try CoreBridge.graph(root.path()).map {
-                Commit(
-                    id: $0.id, author: $0.author, authorEmail: $0.authorEmail,
-                    date: formatter.date(from: $0.authoredAt),
-                    subject: $0.subject,
-                    parents: $0.parents,
-                    references: $0.references,
-                    referenceDetails: ($0.referenceDetails ?? []).map {
-                        CommitReference(
-                            name: $0.name,
-                            fullName: $0.fullName,
-                            kind: $0.kind,
-                            isCurrent: $0.isCurrent,
-                            isSuppressed: $0.isSuppressed
-                        )
-                    },
-                    isStash: $0.isStash
-                )
-            }
+            let rootPath = root.path()
+            let visibleCommitLimit = commitGraphPath == rootPath
+                ? min(max(Self.commitPageSize, commits.count), 9_999)
+                : Self.commitPageSize
+            let graphPage = try CoreBridge.graphPage(
+                rootPath,
+                offset: 0,
+                limit: visibleCommitLimit + 1
+            )
+            let updatedCommits = Self.makeCommits(Array(graphPage.prefix(visibleCommitLimit)))
             if commits != updatedCommits { commits = updatedCommits }
+            commitGraphPath = rootPath
+            hasMoreCommits = graphPage.count > visibleCommitLimit
             let updatedBranches = try git(at: root, "branch", "--format=%(refname:short)")
                 .split(separator: "\n").map(String.init)
             if branches != updatedBranches { branches = updatedBranches }
@@ -353,6 +353,54 @@ final class RepositoryStore {
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+
+    func loadMoreCommits() {
+        guard let root,
+              hasMoreCommits,
+              !isLoadingMoreCommits,
+              let anchor = commits.last else { return }
+
+        let path = root.path()
+        let generation = commitGraphGeneration
+        let offset = commits.count - 1
+        // Boundary commit + one visible page + one look-ahead commit.
+        let requestLimit = Self.commitPageSize + 2
+        isLoadingMoreCommits = true
+
+        commitPageLoadTask = Task { [weak self] in
+            let result = await Task.detached(priority: .utility) {
+                Result {
+                    try CoreBridge.graphPage(path, offset: offset, limit: requestLimit)
+                }
+            }.value
+            guard let self,
+                  self.commitGraphGeneration == generation,
+                  self.root?.path() == path,
+                  self.commits.count == offset + 1,
+                  self.commits.last?.id == anchor.id else { return }
+
+            self.commitPageLoadTask = nil
+            self.isLoadingMoreCommits = false
+            switch result {
+            case let .success(page):
+                // Re-read the boundary commit with each page. If refs moved while
+                // the request was running, rebuild instead of joining two snapshots.
+                guard page.first?.id == anchor.id else {
+                    self.refresh()
+                    return
+                }
+                let existingIDs = Set(self.commits.map(\.id))
+                let olderCommits = Self.makeCommits(
+                    Array(page.dropFirst().prefix(Self.commitPageSize))
+                )
+                    .filter { !existingIDs.contains($0.id) }
+                self.commits.append(contentsOf: olderCommits)
+                self.hasMoreCommits = page.count > Self.commitPageSize + 1
+            case let .failure(error):
+                self.errorMessage = error.localizedDescription
+            }
         }
     }
 
@@ -977,9 +1025,43 @@ final class RepositoryStore {
 
     private var rootPath: String { root?.path() ?? "" }
 
+    private func resetCommitPagination() {
+        commitGraphGeneration &+= 1
+        commitPageLoadTask?.cancel()
+        commitPageLoadTask = nil
+        isLoadingMoreCommits = false
+        hasMoreCommits = false
+    }
+
+    private static func makeCommits(_ graph: [CoreGraphCommit]) -> [Commit] {
+        let formatter = ISO8601DateFormatter()
+        return graph.map {
+            Commit(
+                id: $0.id,
+                author: $0.author,
+                authorEmail: $0.authorEmail,
+                date: formatter.date(from: $0.authoredAt),
+                subject: $0.subject,
+                parents: $0.parents,
+                references: $0.references,
+                referenceDetails: ($0.referenceDetails ?? []).map {
+                    CommitReference(
+                        name: $0.name,
+                        fullName: $0.fullName,
+                        kind: $0.kind,
+                        isCurrent: $0.isCurrent,
+                        isSuppressed: $0.isSuppressed
+                    )
+                },
+                isStash: $0.isStash
+            )
+        }
+    }
+
     private func prepareForRepositoryTransition() {
         fileLoadTask?.cancel()
         commitLoadTask?.cancel()
+        resetCommitPagination()
         clearCommitSelection()
         selectedCommitFiles = []
         selectedCommitFilesLoading = false

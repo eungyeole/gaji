@@ -14,6 +14,7 @@ char *gaji_operation_state_json(const char *path);
 char *gaji_interactive_rebase_plan_json(const char *path, const char *upstream);
 char *gaji_conflict_content_json(const char *path, const char *file);
 char *gaji_commit_graph_json(const char *path, size_t limit);
+char *gaji_commit_graph_page_json(const char *path, size_t offset, size_t limit);
 char *gaji_commit_files_json(const char *path, const char *commit);
 char *gaji_commit_file_diff_json(const char *path, const char *commit, const char *file);
 char *gaji_file_hunks_json(const char *path, const char *file, bool staged);

@@ -125,6 +125,10 @@ fn preserves_requested_limit_after_hiding_stash_helpers() {
     for limit in 1..=5 {
         let graph = gaji_core::commit_graph(repository.path(), limit).unwrap();
         assert_eq!(graph.len(), limit);
+        assert_eq!(
+            graph,
+            gaji_core::commit_graph_page(repository.path(), 0, limit).unwrap()
+        );
         assert!(!graph.iter().any(|commit| commit.id == index_snapshot));
         assert!(!graph.iter().any(|commit| commit.id == untracked_snapshot));
     }
@@ -134,6 +138,69 @@ fn preserves_requested_limit_after_hiding_stash_helpers() {
             .len(),
         5
     );
+}
+
+#[test]
+fn paginated_graph_appends_without_duplicates_and_preserves_classification() {
+    let repository = Repository::new();
+    let commits: Vec<_> = (0..7)
+        .map(|index| {
+            repository.commit_file(
+                &format!("{index}.txt"),
+                &format!("{index}\n"),
+                &format!("commit {index}"),
+            )
+        })
+        .collect();
+    repository.git(&["tag", "v1", &commits[1]]);
+    repository.git(&["branch", "archive", &commits[1]]);
+
+    fs::write(repository.path().join("6.txt"), "changed\n").unwrap();
+    fs::write(repository.path().join("untracked.txt"), "new\n").unwrap();
+    gaji_core::stash_push(repository.path(), "pagination", true).unwrap();
+    let stash_id = repository.git(&["rev-parse", "refs/stash"]);
+    let index_snapshot = repository.git(&["rev-parse", "refs/stash^2"]);
+    let untracked_snapshot = repository.git(&["rev-parse", "refs/stash^3"]);
+
+    let full = gaji_core::commit_graph(repository.path(), 100).unwrap();
+    assert_eq!(full.len(), 8);
+
+    let mut paged = Vec::new();
+    for offset in (0..full.len()).step_by(2) {
+        let page = gaji_core::commit_graph_page(repository.path(), offset, 2).unwrap();
+        assert_eq!(page.len(), 2);
+        paged.extend(page);
+    }
+    assert!(
+        gaji_core::commit_graph_page(repository.path(), full.len(), 2)
+            .unwrap()
+            .is_empty()
+    );
+
+    assert_eq!(paged, full);
+    let unique_ids: std::collections::HashSet<_> =
+        paged.iter().map(|commit| commit.id.as_str()).collect();
+    assert_eq!(unique_ids.len(), paged.len());
+    assert!(!unique_ids.contains(index_snapshot.as_str()));
+    assert!(!unique_ids.contains(untracked_snapshot.as_str()));
+
+    let stash = paged.iter().find(|commit| commit.id == stash_id).unwrap();
+    assert_eq!(stash.kind, gaji_core::GraphCommitKind::Stash);
+    assert!(stash.is_stash);
+    assert!(stash.reference_details.iter().any(|reference| {
+        reference.full_name == "refs/stash"
+            && reference.kind == gaji_core::GraphReferenceKind::Stash
+    }));
+
+    let decorated = paged.iter().find(|commit| commit.id == commits[1]).unwrap();
+    assert!(decorated.reference_details.iter().any(|reference| {
+        reference.full_name == "refs/tags/v1"
+            && reference.kind == gaji_core::GraphReferenceKind::Tag
+    }));
+    assert!(decorated.reference_details.iter().any(|reference| {
+        reference.full_name == "refs/heads/archive"
+            && reference.kind == gaji_core::GraphReferenceKind::LocalBranch
+    }));
 }
 
 #[test]

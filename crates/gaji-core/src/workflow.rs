@@ -835,6 +835,18 @@ pub fn search_history(path: impl AsRef<Path>, query: &str) -> Result<Vec<History
 }
 
 pub fn commit_graph(path: impl AsRef<Path>, limit: usize) -> Result<Vec<GraphCommit>, GajiError> {
+    commit_graph_page(path, 0, limit)
+}
+
+/// Returns one page of the topologically ordered commit graph.
+///
+/// `offset` is measured in visible graph commits, after Git's synthetic stash
+/// helper commits have been removed. This makes adjacent pages safe to append.
+pub fn commit_graph_page(
+    path: impl AsRef<Path>,
+    offset: usize,
+    limit: usize,
+) -> Result<Vec<GraphCommit>, GajiError> {
     let root = root(path.as_ref())?;
     let limit = limit.clamp(1, 10_000);
     let references = graph_references(&root)?;
@@ -853,27 +865,31 @@ pub fn commit_graph(path: impl AsRef<Path>, limit: usize) -> Result<Vec<GraphCom
         .flatten()
         .map(String::as_str)
         .collect();
+    let hidden_helper_ids: HashSet<&str> = helper_ids
+        .iter()
+        .copied()
+        .filter(|id| references.get(*id).is_none_or(Vec::is_empty))
+        .collect();
+    let physical_offset = graph_physical_offset(&root, head_exists, offset, &hidden_helper_ids)?;
     // Git counts the synthetic index/untracked stash parents towards `-n`. Read
     // enough extra rows that removing those implementation details does not
     // unexpectedly shorten the requested graph.
-    let log_limit = limit.saturating_add(helper_ids.len()).to_string();
+    let log_limit = limit.saturating_add(hidden_helper_ids.len()).to_string();
+    let skip = format!("--skip={physical_offset}");
     // Commit metadata may contain other control characters, but Git's normal
     // metadata inputs reject NULs. Use a NUL-delimited fixed six-field stream.
-    let mut arguments = vec![
-        "log",
-        "--all",
-        "--topo-order",
-        "--date=iso-strict",
-        "-z",
-        "-n",
-        &log_limit,
-        "--pretty=format:%H%x00%P%x00%an%x00%ae%x00%aI%x00%s",
-    ];
-    if head_exists {
-        // `--all` follows refs, but a detached HEAD need not have one.
-        arguments.push("HEAD");
-    }
-    let output = git(&root, &arguments)?;
+    let output = graph_log(
+        &root,
+        head_exists,
+        &[
+            "--date=iso-strict",
+            "-z",
+            "-n",
+            &log_limit,
+            &skip,
+            "--pretty=format:%H%x00%P%x00%an%x00%ae%x00%aI%x00%s",
+        ],
+    )?;
     let mut fields = output.split('\0');
     let mut commits: Vec<_> = std::iter::from_fn(|| {
         let id = fields.next()?;
@@ -928,6 +944,51 @@ pub fn commit_graph(path: impl AsRef<Path>, limit: usize) -> Result<Vec<GraphCom
     });
     commits.truncate(limit);
     Ok(commits)
+}
+
+fn graph_physical_offset(
+    root: &Path,
+    head_exists: bool,
+    visible_offset: usize,
+    hidden_commit_ids: &HashSet<&str>,
+) -> Result<usize, GajiError> {
+    if visible_offset == 0 {
+        return Ok(0);
+    }
+
+    // Only hashes are read for the skipped prefix. Decoding full metadata for
+    // every preceding page would make later infinite-scroll loads increasingly
+    // expensive. The extra rows account for every helper that can be hidden.
+    let scan_limit = visible_offset
+        .saturating_add(hidden_commit_ids.len())
+        .to_string();
+    let output = graph_log(
+        root,
+        head_exists,
+        &["-n", &scan_limit, "--pretty=format:%H"],
+    )?;
+    let mut physical_offset = 0;
+    let mut visible_count = 0;
+    for id in output.lines().filter(|id| !id.is_empty()) {
+        if visible_count == visible_offset {
+            break;
+        }
+        physical_offset += 1;
+        if !hidden_commit_ids.contains(id) {
+            visible_count += 1;
+        }
+    }
+    Ok(physical_offset)
+}
+
+fn graph_log(root: &Path, head_exists: bool, options: &[&str]) -> Result<String, GajiError> {
+    let mut arguments = vec!["log", "--all", "--topo-order"];
+    arguments.extend_from_slice(options);
+    if head_exists {
+        // `--all` follows refs, but a detached HEAD need not have one.
+        arguments.push("HEAD");
+    }
+    git(root, &arguments)
 }
 
 fn graph_references(root: &Path) -> Result<HashMap<String, Vec<GraphReference>>, GajiError> {

@@ -286,6 +286,26 @@ pub unsafe extern "C" fn gaji_commit_graph_json(path: *const c_char, limit: usiz
 }
 
 #[unsafe(no_mangle)]
+/// Reads one page of the topologically ordered commit graph as owned UTF-8 JSON.
+///
+/// `offset` counts visible commits, after synthetic stash helper commits are
+/// removed. Adjacent pages can therefore be appended without gaps or duplicates.
+///
+/// # Safety
+/// `path` must be null or point to a valid, NUL-terminated C string. The return
+/// value must be released exactly once with [`gaji_string_free`].
+pub unsafe extern "C" fn gaji_commit_graph_page_json(
+    path: *const c_char,
+    offset: usize,
+    limit: usize,
+) -> *mut c_char {
+    respond(|| {
+        let path = unsafe { required_string(path, "path")? };
+        gaji_core::commit_graph_page(path, offset, limit).map_err(|error| error.to_string())
+    })
+}
+
+#[unsafe(no_mangle)]
 /// Lists files changed by one commit as an owned UTF-8 JSON string.
 ///
 /// # Safety
@@ -687,6 +707,28 @@ mod tests {
         let root = response["value"]["root"].as_str().unwrap();
         assert!(Path::new(root).join(".git").is_dir());
         unsafe { gaji_string_free(pointer) };
+    }
+
+    #[test]
+    fn returns_commit_graph_pages_across_the_ffi_boundary() {
+        let repository = CString::new(env!("CARGO_MANIFEST_DIR")).unwrap();
+        let full_pointer = unsafe { gaji_commit_graph_json(repository.as_ptr(), 4) };
+        let page_pointer = unsafe { gaji_commit_graph_page_json(repository.as_ptr(), 2, 2) };
+
+        let full: serde_json::Value =
+            serde_json::from_str(unsafe { CStr::from_ptr(full_pointer) }.to_str().unwrap())
+                .unwrap();
+        let page: serde_json::Value =
+            serde_json::from_str(unsafe { CStr::from_ptr(page_pointer) }.to_str().unwrap())
+                .unwrap();
+        assert_eq!(full["ok"], true);
+        assert_eq!(page["ok"], true);
+        let full = full["value"].as_array().unwrap();
+        let page = page["value"].as_array().unwrap();
+        assert_eq!(&full[2..], page.as_slice());
+
+        unsafe { gaji_string_free(full_pointer) };
+        unsafe { gaji_string_free(page_pointer) };
     }
 
     #[test]

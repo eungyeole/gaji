@@ -26,7 +26,7 @@ struct CoreOperationState: Decodable {
     let conflicts: [String]
 }
 
-struct CoreGraphCommit: Decodable {
+struct CoreGraphCommit: Decodable, Sendable {
     let id: String
     let parents: [String]
     let references: [String]
@@ -38,7 +38,7 @@ struct CoreGraphCommit: Decodable {
     let subject: String
 }
 
-struct CoreGraphReference: Decodable {
+struct CoreGraphReference: Decodable, Sendable {
     let name: String
     let fullName: String
     let kind: String
@@ -153,6 +153,11 @@ enum CoreBridge {
 
     static func graph(_ path: String, limit: Int = 500) throws -> [CoreGraphCommit] {
         let pointer = path.withCString { gaji_commit_graph_json($0, limit) }
+        return try decode(pointer, as: [CoreGraphCommit].self)
+    }
+
+    static func graphPage(_ path: String, offset: Int, limit: Int = 500) throws -> [CoreGraphCommit] {
+        let pointer = path.withCString { gaji_commit_graph_page_json($0, offset, limit) }
         return try decode(pointer, as: [CoreGraphCommit].self)
     }
 
